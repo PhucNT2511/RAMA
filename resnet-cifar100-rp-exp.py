@@ -95,8 +95,8 @@ class ResNet50(nn.Module):
         num_features = self.model.fc.in_features  ## số nơ-ron đầu vào (in_features) của FC
         self.use_rp = use_rp
         if use_rp:
-            self.rp = RanPACLayer(num_features, num_features // 2, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều
-            self.fc = nn.Linear(num_features // 2, num_classes) ##FC
+            self.rp = RanPACLayer(num_features, num_features, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều
+            self.fc = nn.Linear(num_features , num_classes) ##FC
         else:
             self.fc = nn.Linear(num_features, num_classes) ##FC
 
