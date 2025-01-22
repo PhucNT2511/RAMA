@@ -210,7 +210,6 @@ def main(args: argparse.Namespace) -> None:
     
     wandb.init(
         project="resnet-cifar100-rp-exp",  # Replace with your project name
-        config=args,  # Optionally log hyperparameters
     )
 
     # Transforms & Dataset
