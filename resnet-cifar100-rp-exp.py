@@ -266,6 +266,11 @@ def main(args: argparse.Namespace) -> None:
                 "Test/Loss":val_loss,
                 "Test/Acc":val_acc,
                 })
+        if args.use_rp:
+            logger.info(f"Lambda Value: {model.rp.lambda_param.item()}")
+            wandb.log({
+                "Lambda":model.rp.lambda_param.item(),
+            })
 
     logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
