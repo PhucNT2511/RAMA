@@ -198,7 +198,7 @@ def main(args: argparse.Namespace) -> None:
         args (argparse.Namespace): Command-line arguments.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
+    logger.log(f"Using device: {device}")
 
     experiment_name = get_experiment_name(args)
 
@@ -233,7 +233,7 @@ def main(args: argparse.Namespace) -> None:
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
     model = ResNet50(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value).to(device)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss() ## cross-entropy
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
@@ -262,10 +262,10 @@ def main(args: argparse.Namespace) -> None:
             best_acc = val_acc
             torch.save(model.state_dict(), f"{experiment_name}_best.pth")
 
-        logger.info(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
+        logger.log(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
                     f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
 
-    logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
+    logger.log(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
 
 
