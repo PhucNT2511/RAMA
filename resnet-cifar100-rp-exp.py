@@ -198,7 +198,7 @@ def main(args: argparse.Namespace) -> None:
         args (argparse.Namespace): Command-line arguments.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.log(f"Using device: {device}")
+    logger.info(f"Using device: {device}")
 
     experiment_name = get_experiment_name(args)
 
@@ -262,10 +262,10 @@ def main(args: argparse.Namespace) -> None:
             best_acc = val_acc
             torch.save(model.state_dict(), f"{experiment_name}_best.pth")
 
-        logger.log(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
+        logger.info(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
                     f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
 
-    logger.log(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
+    logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
 
 
