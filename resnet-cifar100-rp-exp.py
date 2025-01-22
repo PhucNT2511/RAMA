@@ -242,14 +242,6 @@ def main(args: argparse.Namespace) -> None:
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device, writer, epoch)
         val_loss, val_acc = evaluate(model, test_loader, criterion, device, writer, epoch)
 
-        wandb.log({
-                "epoch": epoch,
-                "Train/Loss": train_loss,
-                "Train/Acc": train_acc,
-                "Test/Loss":val_loss,
-                "Test/Acc":val_acc,
-                })
-
         writer.add_scalar("Train/Loss", train_loss, epoch)
         writer.add_scalar("Train/Accuracy", train_acc, epoch)
         writer.add_scalar("Test/Loss", val_loss, epoch)
@@ -264,6 +256,14 @@ def main(args: argparse.Namespace) -> None:
 
         logger.info(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
                     f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
+        
+        wandb.log({
+                "epoch": epoch,
+                "Train/Loss": train_loss,
+                "Train/Acc": train_acc,
+                "Test/Loss":val_loss,
+                "Test/Acc":val_acc,
+                })
 
     logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
