@@ -14,7 +14,7 @@ from torchvision.models import ResNet50_Weights, resnet50
 import wandb
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Hyperparameters
@@ -198,7 +198,7 @@ def main(args: argparse.Namespace) -> None:
         args (argparse.Namespace): Command-line arguments.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
+    logger.debug(f"Using device: {device}")
 
     experiment_name = get_experiment_name(args)
 
@@ -253,7 +253,7 @@ def main(args: argparse.Namespace) -> None:
             best_acc = val_acc
             torch.save(model.state_dict(), f"{experiment_name}_best.pth")
 
-        logger.info(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
+        logger.debug(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
                     f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
         
         wandb.log({
@@ -264,7 +264,7 @@ def main(args: argparse.Namespace) -> None:
                 "Test/Acc":val_acc,
                 })
 
-    logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
+    logger.debug(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
 
 
