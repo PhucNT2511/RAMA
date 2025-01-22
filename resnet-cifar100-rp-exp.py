@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Hyperparameters
 BATCH_SIZE = 128
 EPOCHS = 100
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-5
 BETA1 = 0.9
 BETA2 = 0.999
 EPSILON = 1e-8
@@ -233,10 +233,11 @@ def main(args: argparse.Namespace) -> None:
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
+    ################
     model = ResNet50(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1) ###
 
     best_acc = 0.0
     for epoch in range(EPOCHS):
