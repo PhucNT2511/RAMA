@@ -92,9 +92,10 @@ class VGG16(nn.Module):
     def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None):
         super().__init__()
         self.model = vgg16(weights=VGG16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
-        self.features = nn.Sequential(
-            *self.model.features,                 # Phần convolutional
-            *list(self.model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
+        features = nn.Sequential(
+            *model.features,    
+            model.avgpool,
+            *list(model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
         )
         num_features = self.model.classifier[6].in_features  ## số nơ-ron đầu vào (in_features) của FC
         self.use_rp = use_rp
@@ -220,8 +221,8 @@ def main(args: argparse.Namespace) -> None:
 
     # Transforms & Dataset
     transform_train = transforms.Compose([
-        transforms.Resize(224),
-        transforms.RandomCrop(224, padding=8),  ## 32x32 --> 40x40 rồi lại cắt ra 32x32
+        #transforms.Resize(224),
+        transforms.RandomCrop(224, padding=8), 
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
