@@ -269,6 +269,7 @@ def main(args: argparse.Namespace) -> None:
         if args.use_rp:
             logger.info(f"Lambda Value: {model.rp.lambda_param.item()}")
             wandb.log({
+                "epoch": epoch,
                 "Lambda":model.rp.lambda_param.item(),
             })
 
