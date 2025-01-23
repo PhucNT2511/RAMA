@@ -95,6 +95,7 @@ class VGG16(nn.Module):
         self.features = nn.Sequential(
             *self.model.features,    
             self.model.avgpool,
+            nn.Flatten(),
             *list(self.model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
         )
         num_features = self.model.classifier[6].in_features  ## số nơ-ron đầu vào (in_features) của FC
