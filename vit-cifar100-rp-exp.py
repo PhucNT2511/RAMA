@@ -92,7 +92,7 @@ class ViT16(nn.Module):
         super().__init__()
         self.model = vit_b_16(weights=ViT_B_16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
         self.features = nn.Sequential(*list(self.model.children())[:-1]) ## Lấy tất cả các tầng trừ FC cuối cùng
-        num_features = self.model.fc.in_features  ## số nơ-ron đầu vào (in_features) của FC
+        num_features = self.model.heads.head.in_features  ## số nơ-ron đầu vào (in_features) của FC
         self.use_rp = use_rp
         if use_rp:
             self.rp = RanPACLayer(num_features, num_features, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều

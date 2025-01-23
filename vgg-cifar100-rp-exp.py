@@ -92,8 +92,11 @@ class VGG16(nn.Module):
     def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None):
         super().__init__()
         self.model = vgg16(weights=VGG16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
-        self.features = nn.Sequential(*list(self.model.children())[:-1]) ## Lấy tất cả các tầng trừ FC cuối cùng
-        num_features = self.model.fc.in_features  ## số nơ-ron đầu vào (in_features) của FC
+        self.features = nn.Sequential(
+            *self.model.features,                 # Phần convolutional
+            *list(self.model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
+        )
+        num_features = self.model.classifier[6].in_features  ## số nơ-ron đầu vào (in_features) của FC
         self.use_rp = use_rp
         if use_rp:
             self.rp = RanPACLayer(num_features, num_features, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều
