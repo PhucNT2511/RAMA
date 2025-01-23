@@ -278,6 +278,9 @@ def main(args: argparse.Namespace) -> None:
             wandb.log({
                 "Lambda":model.rp.lambda_param.item(),
             }, commit=True)
+        else:
+            wandb.log({
+            }, commit=True)
 
     logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
