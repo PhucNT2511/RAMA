@@ -93,9 +93,9 @@ class VGG16(nn.Module):
         super().__init__()
         self.model = vgg16(weights=VGG16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
         features = nn.Sequential(
-            *model.features,    
-            model.avgpool,
-            *list(model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
+            *self.model.features,    
+            self.model.avgpool,
+            *list(self.model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
         )
         num_features = self.model.classifier[6].in_features  ## số nơ-ron đầu vào (in_features) của FC
         self.use_rp = use_rp
