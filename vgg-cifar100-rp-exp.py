@@ -92,7 +92,7 @@ class VGG16(nn.Module):
     def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None):
         super().__init__()
         self.model = vgg16(weights=VGG16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
-        features = nn.Sequential(
+        self.features = nn.Sequential(
             *self.model.features,    
             self.model.avgpool,
             *list(self.model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
