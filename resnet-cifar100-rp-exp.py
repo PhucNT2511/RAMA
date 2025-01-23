@@ -265,12 +265,12 @@ def main(args: argparse.Namespace) -> None:
                 "Train/Acc": train_acc,
                 "Test/Loss":val_loss,
                 "Test/Acc":val_acc,
-                })
+                }, commit=False)
         if args.use_rp == True and args.lambda_value == None:
             logger.info(f"Lambda Value: {model.rp.lambda_param.item()}")
             wandb.log({
                 "Lambda":model.rp.lambda_param.item(),
-            })
+            }, commit=True)
 
     logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
