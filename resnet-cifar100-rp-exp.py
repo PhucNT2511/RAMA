@@ -266,7 +266,7 @@ def main(args: argparse.Namespace) -> None:
                 "Test/Loss":val_loss,
                 "Test/Acc":val_acc,
                 })
-        if args.use_rp:
+        if args.use_rp == True and args.lambda_value == None:
             logger.info(f"Lambda Value: {model.rp.lambda_param.item()}")
             wandb.log({
                 "step": epoch,
