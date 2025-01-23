@@ -39,7 +39,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     Returns:
         str: Experiment name.
     """
-    experiment_name = "ResNet50_CIFAR100"
+    experiment_name = "VIT16_CIFAR100"
     if args.use_rp:
         experiment_name += f"_RP_lambda_{args.lambda_value}"
     return experiment_name
@@ -78,10 +78,10 @@ class RanPACLayer(nn.Module):
         x = self.norm(x)
         return x
 
-## ResNet50
-class ResNet50(nn.Module):
+## ViT16
+class ViT16(nn.Module):
     """
-    Modified ResNet50 model with optional randomized projection.
+    Modified ViT16 model with optional randomized projection.
 
     Args:
         num_classes (int): Number of output classes.
@@ -102,7 +102,7 @@ class ResNet50(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through the ResNet50 model.
+        Forward pass through the ViT16 model.
 
         Args:
             x (torch.Tensor): Input tensor.
@@ -234,7 +234,7 @@ def main(args: argparse.Namespace) -> None:
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
     ################
-    model = ResNet50(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value).to(device)
+    model = ViT16(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1) ###
