@@ -260,7 +260,7 @@ def main(args: argparse.Namespace) -> None:
                     f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
         
         wandb.log({
-                "step": epoch,
+                "epoch": epoch,
                 "Train/Loss": train_loss,
                 "Train/Acc": train_acc,
                 "Test/Loss":val_loss,
@@ -269,7 +269,6 @@ def main(args: argparse.Namespace) -> None:
         if args.use_rp == True and args.lambda_value == None:
             logger.info(f"Lambda Value: {model.rp.lambda_param.item()}")
             wandb.log({
-                "step": epoch,
                 "Lambda":model.rp.lambda_param.item(),
             })
 
