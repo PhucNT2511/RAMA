@@ -94,14 +94,14 @@ class VGG16(nn.Module):
         self.model = vgg16(weights=VGG16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
         self.features = nn.Sequential(
             *self.model.features,    
-            self.model.avgpool,
-            nn.Flatten(),
-            *list(self.model.classifier[:-1])     # Lấy các lớp trong classifier, trừ FC cuối
+            self.model.avgpool,            
         )
+        self.features2 = nn.Sequential(*list(self.model.classifier[:-1]) )    # Lấy các lớp trong classifier, trừ FC cuối
         num_features = self.model.classifier[6].in_features  ## số nơ-ron đầu vào (in_features) của FC
         self.use_rp = use_rp
-        if use_rp:
-            self.rp = RanPACLayer(num_features, num_features, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều
+        if use_rp:       
+            self.rp1 = RanPACLayer(25088, 25088, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều     
+            self.rp2 = RanPACLayer(num_features, num_features, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều
             self.fc = nn.Linear(num_features , num_classes) ##FC
         else:
             self.fc = nn.Linear(num_features, num_classes) ##FC
@@ -118,7 +118,10 @@ class VGG16(nn.Module):
         """
         x = torch.flatten(self.features(x), 1) ## Tính toán dữ liệu đầu vào + Làm phẳng
         if self.use_rp:
-            x = self.rp(x)
+            x = self.rp1(x)
+            x = self.features2(x)
+        else:
+            x = self.features2(x)
         return self.fc(x)
 
 
