@@ -236,7 +236,8 @@ def main(args: argparse.Namespace) -> None:
     ################
     model = ResNet50(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
+    lr = args.learning_rate if args.learning_rate != None else LEARNING_RATE
+    optimizer = optim.Adam(model.parameters(), lr=lr, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1) ###
 
     best_acc = 0.0
@@ -283,6 +284,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_rp", type=bool, default=False)
     parser.add_argument("--lambda_value", type=float, default=None)
+    parser.add_argument("--learning_rate", type=float, default=None)
     args = parser.parse_args()
     main(args)
 
