@@ -94,9 +94,11 @@ class VGG16(nn.Module):
         self.model = vgg16(weights=VGG16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
         self.features = nn.Sequential(
             *self.model.features,    
-            self.model.avgpool,            
+            self.model.avgpool,   
+            nn.Flatten(),
+            *list(self.model.classifier[:-1])
         )
-        self.features2 = nn.Sequential(*list(self.model.classifier[:-1]) )    # Lấy các lớp trong classifier, trừ FC cuối
+        #self.features2 = nn.Sequential(*list(self.model.classifier[:-1]) )    # Lấy các lớp trong classifier, trừ FC cuối
         num_features = self.model.classifier[6].in_features  ## số nơ-ron đầu vào (in_features) của FC
         self.use_rp = use_rp
         if use_rp:       
@@ -118,11 +120,11 @@ class VGG16(nn.Module):
         """
         x = torch.flatten(self.features(x), 1) ## Tính toán dữ liệu đầu vào + Làm phẳng
         if self.use_rp:
-            x = self.rp1(x)
-            x = self.features2(x)
+            #x = self.rp1(x)
+            #x = self.features2(x)
             x = self.rp2(x)
-        else:
-            x = self.features2(x)
+        #else:
+            #x = self.features2(x)
         return self.fc(x)
 
 
@@ -278,11 +280,11 @@ def main(args: argparse.Namespace) -> None:
                 "Test/Acc":val_acc,
                 }, commit=False)
         if args.use_rp == True and args.lambda_value == None:
-            logger.info(f"Lambda 1 Value: {model.rp1.lambda_param.item()}")
-            logger.info(f"Lambda 2 Value: {model.rp2.lambda_param.item()}")
+            #logger.info(f"Lambda 1 Value: {model.rp1.lambda_param.item()}")
+            logger.info(f"Lambda Value: {model.rp2.lambda_param.item()}")
             wandb.log({
-                "Lambda1":model.rp1.lambda_param.item(),
-                "Lambda2":model.rp2.lambda_param.item(),
+                #"Lambda1":model.rp1.lambda_param.item(),
+                "Lambda":model.rp2.lambda_param.item(),
             }, commit=True)
         else:
             wandb.log({
