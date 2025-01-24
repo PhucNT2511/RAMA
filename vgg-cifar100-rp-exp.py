@@ -120,6 +120,7 @@ class VGG16(nn.Module):
         if self.use_rp:
             x = self.rp1(x)
             x = self.features2(x)
+            x = self.rp2(x)
         else:
             x = self.features2(x)
         return self.fc(x)
@@ -277,9 +278,11 @@ def main(args: argparse.Namespace) -> None:
                 "Test/Acc":val_acc,
                 }, commit=False)
         if args.use_rp == True and args.lambda_value == None:
-            logger.info(f"Lambda Value: {model.rp.lambda_param.item()}")
+            logger.info(f"Lambda 1 Value: {model.rp1.lambda_param.item()}")
+            logger.info(f"Lambda 2 Value: {model.rp2.lambda_param.item()}")
             wandb.log({
-                "Lambda":model.rp.lambda_param.item(),
+                "Lambda1":model.rp1.lambda_param.item(),
+                "Lambda2":model.rp2.lambda_param.item(),
             }, commit=True)
         else:
             wandb.log({
