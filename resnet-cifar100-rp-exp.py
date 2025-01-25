@@ -131,7 +131,7 @@ class ResNet50(nn.Module):
         self.use_cnn_rp = use_cnn_rp
 
         if use_cnn_rp:
-            self.cnn_rp = CNNRandomProjection(1024,16,16,cnn_lambda_value)
+            self.cnn_rp = CNNRandomProjection(64,16,16,cnn_lambda_value)
         if use_linear_rp:
             self.linear_rp = RanPACLayer(num_features, num_features, linear_lambda_value)  
             
