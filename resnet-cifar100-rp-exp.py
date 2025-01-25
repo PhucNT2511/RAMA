@@ -74,7 +74,7 @@ class RanPACLayer(nn.Module):
             torch.Tensor: Transformed tensor.
         """
         x = self.projection(x) * self.lambda_param
-        x = nn.functional.leaky_relu(x, negative_slope=0.1)
+        x = nn.functional.leaky_relu(x, negative_slope=0.2)
         x = self.norm(x)
         return x
 
