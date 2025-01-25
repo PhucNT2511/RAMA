@@ -252,8 +252,11 @@ def main(args: argparse.Namespace) -> None:
 
         writer.add_histogram("Model/Weights", model.fc.weight, epoch)
 
-        if epoch % 10 == 0:
+        if (epoch+1) % 10 == 0:
                 scheduler.step()
+                torch.save(model.state_dict(), f"{experiment_name}_{epoch+1}.pth")
+
+
 
         if val_acc > best_acc:
             best_acc = val_acc
