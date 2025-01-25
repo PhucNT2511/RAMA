@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Hyperparameters
-BATCH_SIZE = 128
+BATCH_SIZE = 200
 EPOCHS = 200
 LEARNING_RATE = 5e-06
 BETA1 = 0.9
