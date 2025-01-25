@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 # Hyperparameters
 BATCH_SIZE = 128
 EPOCHS = 100
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 BETA1 = 0.9
 BETA2 = 0.999
 EPSILON = 1e-8
-WEIGHT_DECAY = 1e-4
+WEIGHT_DECAY = 1e-5
 
 ## Just to name exp
 def get_experiment_name(args: argparse.Namespace) -> str:
@@ -238,7 +238,7 @@ def main(args: argparse.Namespace) -> None:
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     lr = args.learning_rate if args.learning_rate != None else LEARNING_RATE
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1000, eta_min=0.00001) ###
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1) ###
 
     best_acc = 0.0
     for epoch in range(EPOCHS):
@@ -252,7 +252,9 @@ def main(args: argparse.Namespace) -> None:
 
         writer.add_histogram("Model/Weights", model.fc.weight, epoch)
 
-        scheduler.step()
+        if epoch % 10 == 0:
+                scheduler.step()
+
         if val_acc > best_acc:
             best_acc = val_acc
             torch.save(model.state_dict(), f"{experiment_name}_best.pth")
