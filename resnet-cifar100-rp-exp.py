@@ -116,14 +116,14 @@ class ResNet50(nn.Module):
         self.features = nn.Sequential(
             self.model.conv1,
             self.model.bn1,
-            self.model.relu,
-        )
-        self.features2 = nn.Sequential(
+            self.model.relu,        
             self.model.maxpool,
             self.model.layer1,
             self.model.layer2,
             self.model.layer3,
             self.model.layer4,
+        )
+        self.features2 = nn.Sequential(
             self.model.avgpool
         )
         num_features = self.model.fc.in_features  
@@ -131,7 +131,7 @@ class ResNet50(nn.Module):
         self.use_cnn_rp = use_cnn_rp
 
         if use_cnn_rp:
-            self.cnn_rp = CNNRandomProjection(64,16,16,cnn_lambda_value)
+            self.cnn_rp = CNNRandomProjection(2048,1,1,cnn_lambda_value)
         if use_linear_rp:
             self.linear_rp = RanPACLayer(num_features, num_features, linear_lambda_value)  
             
