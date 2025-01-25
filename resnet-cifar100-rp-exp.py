@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Hyperparameters
 BATCH_SIZE = 128
 EPOCHS = 200
-LEARNING_RATE = 1e-05
+LEARNING_RATE = 5e-05
 BETA1 = 0.9
 BETA2 = 0.999
 EPSILON = 1e-8
@@ -44,7 +44,25 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         experiment_name += f"_RP_lambda_{args.lambda_value}"
     return experiment_name
 
-## Actually, RM
+################
+class CNNRandomProjection(nn.Module):
+    def __init__(self, C, H, W):
+        super(CNNRandomProjection, self).__init__()
+        # Tạo ma trận random với kích thước (C, H, W)
+        self.random_projection = nn.Parameter(
+            torch.randn(C, H, W), requires_grad=False
+        )
+        self.batch_norm = nn.BatchNorm2d(C)
+
+    def forward(self, x):
+        # Nhân ma trận random projection với input (B, C, H, W)
+        # Tạo ma trận random_projection broadcast cho tất cả các batch
+        projected = x * self.random_projection  # Broadcast tự động (B, C, H, W)
+        projected = nn.functional.leaky_relu(projected, negative_slope=0.2)
+        projected = self.batch_norm(projected)
+        return projected  
+
+## Actually, Linear
 class RanPACLayer(nn.Module):
     """
     A randomized projection layer with optional normalization.
@@ -91,11 +109,24 @@ class ResNet50(nn.Module):
     def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None):
         super().__init__()
         self.model = resnet50(weights=ResNet50_Weights.DEFAULT)  
-        self.features = nn.Sequential(*list(self.model.children())[:-1]) 
+        #self.features = nn.Sequential(*list(self.model.children())[:-1]) 
+        self.features = nn.Sequential(
+            self.model.conv1,
+            self.model.bn1,
+            self.model.relu,
+            self.model.maxpool,
+            self.model.layer1,
+            self.model.layer2,
+            self.model.layer3,)
+        self.features2 = nn.Sequential(
+            self.model.layer4,
+            self.model.avgpool
+        )
         num_features = self.model.fc.in_features  
         self.use_rp = use_rp
         if use_rp:
-            self.rp = RanPACLayer(num_features, num_features, lambda_value)  
+            self.cnn_rp = CNNRandomProjection(1024,1,1)
+            self.linear_rp = RanPACLayer(num_features, num_features, lambda_value)  
             self.fc = nn.Linear(num_features , num_classes)
         else:
             self.fc = nn.Linear(num_features, num_classes)
@@ -110,9 +141,13 @@ class ResNet50(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        x = torch.flatten(self.features(x), 1) 
+        x = self.features(x)
         if self.use_rp:
-            x = self.rp(x)
+            x = self.cnn_rp(x)
+            x = torch.flatten(self.features2(x),1)
+            x = self.linear_rp(x)
+        else:
+            x = torch.flatten(self.features2(x),1)
         return self.fc(x)
 
 
