@@ -40,8 +40,8 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         str: Experiment name.
     """
     experiment_name = "ResNet50_CIFAR100"
-    if args.use_rp:
-        experiment_name += f"_RP_lambda_{args.lambda_value}"
+    if args.use_linear_rp:
+        experiment_name += f"_RP_lambda_{args.linear_lambda_value}"
     return experiment_name
 
 ################
@@ -104,10 +104,11 @@ class ResNet50(nn.Module):
 
     Args:
         num_classes (int): Number of output classes.
-        use_rp (bool): Whether to use the RanPACLayer.
+        use_cnn_rp (bool): Whether to use the CNNRandomProjection.
+        use_linear_rp (bool): Whether to use the RanPACLayer.
         lambda_value (Optional[float]): Lambda scaling value for RanPACLayer.
     """
-    def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None):
+    def __init__(self, num_classes: int, use_linear_rp: bool = False, use_cnn_rp: bool = False, lambda_value: Optional[float] = None):
         super().__init__()
         self.model = resnet50(weights=ResNet50_Weights.DEFAULT)  
         #self.features = nn.Sequential(*list(self.model.children())[:-1]) 
@@ -124,13 +125,15 @@ class ResNet50(nn.Module):
             self.model.avgpool
         )
         num_features = self.model.fc.in_features  
-        self.use_rp = use_rp
-        if use_rp:
+        self.use_linear_rp = use_linear_rp
+        self.use_cnn_rp = use_cnn_rp
+
+        if use_cnn_rp:
             self.cnn_rp = CNNRandomProjection(1024,1,1)
+        if use_linear_rp:
             self.linear_rp = RanPACLayer(num_features, num_features, lambda_value)  
-            self.fc = nn.Linear(num_features , num_classes)
-        else:
-            self.fc = nn.Linear(num_features, num_classes)
+            
+        self.fc = nn.Linear(num_features, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -143,12 +146,11 @@ class ResNet50(nn.Module):
             torch.Tensor: Output tensor.
         """
         x = self.features(x)
-        if self.use_rp:
+        if self.use_cnn_rp:
             x = self.cnn_rp(x)
-            x = torch.flatten(self.features2(x),1)
+        x = torch.flatten(self.features2(x),1)
+        if self.use_linear_rp:
             x = self.linear_rp(x)
-        else:
-            x = torch.flatten(self.features2(x),1)
         return self.fc(x)
 
 
@@ -270,7 +272,7 @@ def main(args: argparse.Namespace) -> None:
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
     ################
-    model = ResNet50(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value).to(device)
+    model = ResNet50(num_classes=100, use_linear_rp=args.use_linear_rp, use_cnn_rp=args.use_cnn_rp, lambda_value=args.lambda_value).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     lr = args.learning_rate if args.learning_rate != None else LEARNING_RATE
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
@@ -307,16 +309,19 @@ def main(args: argparse.Namespace) -> None:
                 "Test/Loss":val_loss,
                 "Test/Acc":val_acc,
                 }, commit=False)
-        if args.use_rp == True and args.lambda_value == None:
+        if args.use_cnn_rp == True and args.cnn_lambda_value == None:
             logger.info(f"Lambda 1 Value: {model.cnn_rp.lambda_param.item()}")
-            logger.info(f"Lambda 2 Value: {model.linear_rp.lambda_param.item()}")
             wandb.log({
                 "Lambda 1":model.cnn_rp.lambda_param.item(),
-                "Lambda 2":model.linear_rp.lambda_param.item(),
-            }, commit=True)
-        else:
+            }, commit=False)
+        if args.use_linear_rp == True and args.linear_lambda_value == None:
+            logger.info(f"Lambda 2 Value: {model.linear_rp.lambda_param.item()}")
             wandb.log({
-            }, commit=True)
+                "Lambda 2":model.linear_rp.lambda_param.item(),
+            }, commit=False)
+        
+        wandb.log({
+        }, commit=True)
 
     logger.info(f"Training finished. Best validation accuracy: {best_acc:.2f}%")
     writer.close()
@@ -324,7 +329,8 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--use_rp", type=bool, default=False)
+    parser.add_argument("--use_linear_rp", type=bool, default=False)
+    parser.add_argument("--use_cnn_rp", type=bool, default=False)
     parser.add_argument("--lambda_value", type=float, default=None)
     parser.add_argument("--learning_rate", type=float, default=None)
     args = parser.parse_args()
