@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Hyperparameters
-BATCH_SIZE = 200
+BATCH_SIZE = 128
 EPOCHS = 200
 LEARNING_RATE = 1e-05
 BETA1 = 0.9
@@ -57,10 +57,10 @@ class RanPACLayer(nn.Module):
     """
     def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch"):
         super(RanPACLayer, self).__init__()
-        self.projection = nn.Linear(input_dim, output_dim, bias=False) ##Phép biến đổi tuyến tính, nhưng thực chất là tạo một ma trận chiếu
-        self.projection.weight.requires_grad = False  ## Không đặt grad cho phép chiếu (hợp lý)
-        nn.init.normal_(self.projection.weight, mean=0, std=1.0) ## Phân phối Gauss cho khởi tạo trọng số của ma trận chiếu, mà đằng nào cũng ko học gì
-        self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) #Để là lambda, hoặc tham số học được với khởi tạo 1e-3
+        self.projection = nn.Linear(input_dim, output_dim, bias=False) 
+        self.projection.weight.requires_grad = False 
+        nn.init.normal_(self.projection.weight, mean=0, std=1.0) 
+        self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) 
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -90,15 +90,15 @@ class ResNet50(nn.Module):
     """
     def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None):
         super().__init__()
-        self.model = resnet50(weights=ResNet50_Weights.DEFAULT)  ## Lấy trọng số pre-trained
-        self.features = nn.Sequential(*list(self.model.children())[:-1]) ## Lấy tất cả các tầng trừ FC cuối cùng
-        num_features = self.model.fc.in_features  ## số nơ-ron đầu vào (in_features) của FC
+        self.model = resnet50(weights=ResNet50_Weights.DEFAULT)  
+        self.features = nn.Sequential(*list(self.model.children())[:-1]) 
+        num_features = self.model.fc.in_features  
         self.use_rp = use_rp
         if use_rp:
-            self.rp = RanPACLayer(num_features, num_features, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều
-            self.fc = nn.Linear(num_features , num_classes) ##FC
+            self.rp = RanPACLayer(num_features, num_features, lambda_value)  
+            self.fc = nn.Linear(num_features , num_classes)
         else:
-            self.fc = nn.Linear(num_features, num_classes) ##FC
+            self.fc = nn.Linear(num_features, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -110,7 +110,7 @@ class ResNet50(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        x = torch.flatten(self.features(x), 1) ## Tính toán dữ liệu đầu vào + Làm phẳng
+        x = torch.flatten(self.features(x), 1) 
         if self.use_rp:
             x = self.rp(x)
         return self.fc(x)
@@ -216,7 +216,7 @@ def main(args: argparse.Namespace) -> None:
 
     # Transforms & Dataset
     transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),  ## 32x32 --> 40x40 rồi lại cắt ra 32x32
+        transforms.RandomCrop(32, padding=4),  
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
