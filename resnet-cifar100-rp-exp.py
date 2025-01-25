@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Hyperparameters
 BATCH_SIZE = 200
 EPOCHS = 200
-LEARNING_RATE = 5e-06
+LEARNING_RATE = 1e-05
 BETA1 = 0.9
 BETA2 = 0.999
 EPSILON = 1e-8
@@ -251,12 +251,11 @@ def main(args: argparse.Namespace) -> None:
         writer.add_scalar("Test/Accuracy", val_acc, epoch)
 
         writer.add_histogram("Model/Weights", model.fc.weight, epoch)
+        
+        scheduler.step()
 
         if (epoch+1) % 10 == 0:
-                scheduler.step()
-                torch.save(model.state_dict(), f"{experiment_name}_{epoch+1}.pth")
-
-
+            torch.save(model.state_dict(), f"{experiment_name}_{epoch+1}.pth")
 
         if val_acc > best_acc:
             best_acc = val_acc
