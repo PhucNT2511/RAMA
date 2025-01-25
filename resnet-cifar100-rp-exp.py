@@ -238,7 +238,7 @@ def main(args: argparse.Namespace) -> None:
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     lr = args.learning_rate if args.learning_rate != None else LEARNING_RATE
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1) ###
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1000, eta_min=0.00001) ###
 
     best_acc = 0.0
     for epoch in range(EPOCHS):
