@@ -71,7 +71,8 @@ class RanPACLayer(nn.Module):
     Args:
         input_dim (int): Input dimension.
         output_dim (int): Output dimension.
-        lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
+        linear_lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
+        cnn_lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
         norm_type (str): Normalization type, either "batch" or "layer".
     """
     def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch"):
@@ -108,7 +109,7 @@ class ResNet50(nn.Module):
         use_linear_rp (bool): Whether to use the RanPACLayer.
         lambda_value (Optional[float]): Lambda scaling value for RanPACLayer.
     """
-    def __init__(self, num_classes: int, use_linear_rp: bool = False, use_cnn_rp: bool = False, lambda_value: Optional[float] = None):
+    def __init__(self, num_classes: int, use_linear_rp: bool = False, use_cnn_rp: bool = False, linear_lambda_value: Optional[float] = None, cnn_lambda_value: Optional[float] = None):
         super().__init__()
         self.model = resnet50(weights=ResNet50_Weights.DEFAULT)  
         #self.features = nn.Sequential(*list(self.model.children())[:-1]) 
@@ -130,9 +131,9 @@ class ResNet50(nn.Module):
         self.use_cnn_rp = use_cnn_rp
 
         if use_cnn_rp:
-            self.cnn_rp = CNNRandomProjection(1024,16,16)
+            self.cnn_rp = CNNRandomProjection(1024,16,16,cnn_lambda_value)
         if use_linear_rp:
-            self.linear_rp = RanPACLayer(num_features, num_features, lambda_value)  
+            self.linear_rp = RanPACLayer(num_features, num_features, linear_lambda_value)  
             
         self.fc = nn.Linear(num_features, num_classes)
 
@@ -273,7 +274,7 @@ def main(args: argparse.Namespace) -> None:
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
     ################
-    model = ResNet50(num_classes=100, use_linear_rp=args.use_linear_rp, use_cnn_rp=args.use_cnn_rp, lambda_value=args.lambda_value).to(device)
+    model = ResNet50(num_classes=100, use_linear_rp=args.use_linear_rp, use_cnn_rp=args.use_cnn_rp, linear_lambda_value=args.linear_lambda_value, cnn_lambda_value=args.cnn_lambda_value).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     lr = args.learning_rate if args.learning_rate != None else LEARNING_RATE
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
@@ -332,7 +333,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_linear_rp", type=bool, default=False)
     parser.add_argument("--use_cnn_rp", type=bool, default=False)
-    parser.add_argument("--lambda_value", type=float, default=None)
+    parser.add_argument("--linear_lambda_value", type=float, default=None)
+    parser.add_argument("--cnn_lambda_value", type=float, default=None)
     parser.add_argument("--learning_rate", type=float, default=None)
     args = parser.parse_args()
     main(args)
