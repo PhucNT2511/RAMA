@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Hyperparameters
 BATCH_SIZE = 128
-EPOCHS = 100
+EPOCHS = 200
 LEARNING_RATE = 5e-06
 BETA1 = 0.9
 BETA2 = 0.999
