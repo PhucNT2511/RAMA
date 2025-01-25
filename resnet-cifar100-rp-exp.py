@@ -307,9 +307,11 @@ def main(args: argparse.Namespace) -> None:
                 "Test/Acc":val_acc,
                 }, commit=False)
         if args.use_rp == True and args.lambda_value == None:
-            logger.info(f"Lambda Value: {model.rp.lambda_param.item()}")
+            logger.info(f"Lambda 1 Value: {model.cnn_rp.lambda_param.item()}")
+            logger.info(f"Lambda 2 Value: {model.linear_rp.lambda_param.item()}")
             wandb.log({
-                "Lambda":model.rp.lambda_param.item(),
+                "Lambda 1":model.cnn_rp.lambda_param.item(),
+                "Lambda 2":model.linear_rp.lambda_param.item(),
             }, commit=True)
         else:
             wandb.log({
