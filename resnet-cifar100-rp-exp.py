@@ -46,18 +46,19 @@ def get_experiment_name(args: argparse.Namespace) -> str:
 
 ################
 class CNNRandomProjection(nn.Module):
-    def __init__(self, C, H, W):
+    def __init__(self, C, H, W, lambda_value = None):
         super(CNNRandomProjection, self).__init__()
         # Tạo ma trận random với kích thước (C, H, W)
         self.random_projection = nn.Parameter(
             torch.randn(C, H, W), requires_grad=False
         )
+        self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) 
         self.batch_norm = nn.BatchNorm2d(C)
 
     def forward(self, x):
         # Nhân ma trận random projection với input (B, C, H, W)
         # Tạo ma trận random_projection broadcast cho tất cả các batch
-        projected = x * self.random_projection  # Broadcast tự động (B, C, H, W)
+        projected = self.lambda_param * x * self.random_projection  # Broadcast tự động (B, C, H, W)
         projected = nn.functional.leaky_relu(projected, negative_slope=0.2)
         projected = self.batch_norm(projected)
         return projected  
