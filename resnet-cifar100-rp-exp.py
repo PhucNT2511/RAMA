@@ -59,7 +59,7 @@ class CNNRandomProjection(nn.Module):
         # Nhân ma trận random projection với input (B, C, H, W)
         # Tạo ma trận random_projection broadcast cho tất cả các batch
         projected = self.lambda_param * x * self.random_projection  # Broadcast tự động (B, C, H, W)
-        projected = nn.functional.leaky_relu(projected, negative_slope=0.2)
+        projected = nn.functional.relu(projected)
         projected = self.batch_norm(projected)
         return projected  
 
@@ -94,7 +94,7 @@ class RanPACLayer(nn.Module):
             torch.Tensor: Transformed tensor.
         """
         x = self.projection(x) * self.lambda_param
-        x = nn.functional.leaky_relu(x, negative_slope=0.2)
+        x = nn.functional.relu(x)
         x = self.norm(x)
         return x
 
