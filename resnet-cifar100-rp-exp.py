@@ -86,6 +86,7 @@ class RanPACLayer(nn.Module):
         nn.init.normal_(self.projection.weight, mean=0, std=1.0) 
         self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) 
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
+        self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
