@@ -46,7 +46,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
 
 ################
 class CNNRandomProjection(nn.Module):
-    def __init__(self, C, H, W, lambda_value = None):
+    def __init__(self, C, H, W, lambda_value = None, activation ="relu"):
         super(CNNRandomProjection, self).__init__()
         # Tạo ma trận random với kích thước (C, H, W)
         self.random_projection = nn.Parameter(
@@ -54,12 +54,16 @@ class CNNRandomProjection(nn.Module):
         )
         self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) 
         self.batch_norm = nn.BatchNorm2d(C)
+        self.activation = activation
 
     def forward(self, x):
         # Nhân ma trận random projection với input (B, C, H, W)
         # Tạo ma trận random_projection broadcast cho tất cả các batch
         projected = self.lambda_param * x * self.random_projection  # Broadcast tự động (B, C, H, W)
-        projected = nn.functional.relu(projected)
+        if self.activation == "relu":
+            projected = nn.functional.relu(projected)
+        else:
+            projected = nn.functional.leaky_relu(projected, negative_slope = 0.2)
         projected = self.batch_norm(projected)
         return projected  
 
@@ -75,7 +79,7 @@ class RanPACLayer(nn.Module):
         cnn_lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
         norm_type (str): Normalization type, either "batch" or "layer".
     """
-    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch"):
+    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch", activation: str ="relu"):
         super(RanPACLayer, self).__init__()
         self.projection = nn.Linear(input_dim, output_dim, bias=False) 
         self.projection.weight.requires_grad = False 
@@ -94,7 +98,10 @@ class RanPACLayer(nn.Module):
             torch.Tensor: Transformed tensor.
         """
         x = self.projection(x) * self.lambda_param
-        x = nn.functional.relu(x)
+        if self.activation == "relu":
+            x = nn.functional.relu(x)
+        else:
+            x = nn.functional.leaky_relu(x, negative_slope = 0.2)
         x = self.norm(x)
         return x
 
@@ -109,7 +116,7 @@ class ResNet50(nn.Module):
         use_linear_rp (bool): Whether to use the RanPACLayer.
         lambda_value (Optional[float]): Lambda scaling value for RanPACLayer.
     """
-    def __init__(self, num_classes: int, use_linear_rp: bool = False, use_cnn_rp: bool = False, linear_lambda_value: Optional[float] = None, cnn_lambda_value: Optional[float] = None):
+    def __init__(self, num_classes: int, use_linear_rp: bool = False, use_cnn_rp: bool = False, linear_lambda_value: Optional[float] = None, cnn_lambda_value: Optional[float] = None, activation: str = "relu"):
         super().__init__()
         self.model = resnet50(weights=ResNet50_Weights.DEFAULT)  
         #self.features = nn.Sequential(*list(self.model.children())[:-1]) 
@@ -131,9 +138,9 @@ class ResNet50(nn.Module):
         self.use_cnn_rp = use_cnn_rp
 
         if use_cnn_rp:
-            self.cnn_rp = CNNRandomProjection(2048,1,1,cnn_lambda_value)
+            self.cnn_rp = CNNRandomProjection(2048,1,1,cnn_lambda_value,activation)
         if use_linear_rp:
-            self.linear_rp = RanPACLayer(num_features, num_features, linear_lambda_value)  
+            self.linear_rp = RanPACLayer(num_features, num_features, linear_lambda_value,activation)  
             
         self.fc = nn.Linear(num_features, num_classes)
 
@@ -274,7 +281,7 @@ def main(args: argparse.Namespace) -> None:
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
     ################
-    model = ResNet50(num_classes=100, use_linear_rp=args.use_linear_rp, use_cnn_rp=args.use_cnn_rp, linear_lambda_value=args.linear_lambda_value, cnn_lambda_value=args.cnn_lambda_value).to(device)
+    model = ResNet50(num_classes=100, use_linear_rp=args.use_linear_rp, use_cnn_rp=args.use_cnn_rp, linear_lambda_value=args.linear_lambda_value, cnn_lambda_value=args.cnn_lambda_value, activation=args.activation).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     lr = args.learning_rate if args.learning_rate != None else LEARNING_RATE
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
@@ -336,6 +343,7 @@ if __name__ == "__main__":
     parser.add_argument("--linear_lambda_value", type=float, default=None)
     parser.add_argument("--cnn_lambda_value", type=float, default=None)
     parser.add_argument("--learning_rate", type=float, default=None)
+    parser.add_argument("--activation", type=str, default="relu")
     args = parser.parse_args()
     main(args)
 
