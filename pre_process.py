@@ -11,12 +11,6 @@ import pandas as pd
 
 total_path = pd.read_csv('/kaggle/working/RAMA/meta_data.csv')
 
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
-
 class ImageDataset(Dataset):
     def __init__(self, mode = "train", transform=None):
         self.path = []
