@@ -9,7 +9,7 @@ import random
 import numpy as np
 import pandas as pd
 
-total_path = pd.read_csv('meta_data.csv')
+total_path = pd.read_csv('/kaggle/working/RAMA/meta_data.csv')
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
