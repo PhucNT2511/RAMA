@@ -10,7 +10,7 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.models import ResNet50_Weights, resnet50
-from pre_process import ImageDataset
+from RAMA.pre_process import ImageDataset
 
 import wandb
 
