@@ -276,7 +276,7 @@ def main(args: argparse.Namespace) -> None:
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
     ################
-    model = ResNet50(num_classes=100, use_linear_rp=args.use_linear_rp, use_cnn_rp=args.use_cnn_rp, linear_lambda_value=args.linear_lambda_value, cnn_lambda_value=args.cnn_lambda_value, activation=args.activation).to(device)
+    model = ResNet50(num_classes=200, use_linear_rp=args.use_linear_rp, use_cnn_rp=args.use_cnn_rp, linear_lambda_value=args.linear_lambda_value, cnn_lambda_value=args.cnn_lambda_value, activation=args.activation).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
     lr = args.learning_rate if args.learning_rate != None else LEARNING_RATE
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
