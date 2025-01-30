@@ -410,7 +410,8 @@ def main():
     parser.add_argument("--lr", type=float, default=None, help="Initial learning rate")
     args = parser.parse_args()
 
-    if args.lr != None:
+    global INITIAL_LR
+    if args.lr is not None:
         INITIAL_LR = args.lr
 
     # Generate experiment name and create directories.
