@@ -24,6 +24,9 @@ from torchvision.models import resnet50, vgg16, ResNet50_Weights, VGG16_Weights
 from transformers import ViTModel, ViTConfig, ViTForImageClassification
 import neptune
 
+# Setup logging
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -421,8 +424,8 @@ def main():
         "epochs": EPOCHS,
         "weight_decay": WEIGHT_DECAY
     }
-    NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PROJECT")
-    NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN")
+    NEPTUNE_PRJ_NAME = os.getenv("phuca1tt1bn/RAMA")
+    NEPTUNE_API_TOKEN = os.getenv("eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ==")
     neptune_run = None
     if NEPTUNE_PRJ_NAME and NEPTUNE_API_TOKEN:
         neptune_run = neptune.init_run(
