@@ -212,7 +212,7 @@ class ClassificationModel(nn.Module):
             )
             self.features = ViTModel(self.config)
             with torch.no_grad():
-                self.features.embeddings.patch_embeddings.weight.data = pretrained.vit.embeddings.patch_embeddings.weight.data[:, :, :4, :4]
+                self.features.embeddings.patch_embeddings.projection.weight.data = pretrained.vit.embeddings.patch_embeddings.projection.weight.data[:, :, :4, :4]
                 self.features.embeddings.cls_token.data = pretrained.vit.embeddings.cls_token.data
                 self.features.encoder = pretrained.vit.encoder
             self.feature_dim = self.config.hidden_size
