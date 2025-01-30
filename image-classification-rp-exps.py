@@ -434,6 +434,7 @@ def main():
             name=exp_name
         )
         neptune_run["config"] = config
+        print('Init NEPTUNE SUCCESSFULLY!')
 
     dataset_manager = DatasetManager(args.dataset)
     train_loader, test_loader = dataset_manager.get_loaders()
