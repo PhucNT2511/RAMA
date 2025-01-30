@@ -407,7 +407,11 @@ def main():
     parser.add_argument("--dataset", type=DatasetType, choices=list(DatasetType), required=True, help="Dataset type")
     parser.add_argument("--use_rp", type=bool, default=False, help="Use randomized projection")
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
+    parser.add_argument("--lr", type=float, default=None, help="Initial learning rate")
     args = parser.parse_args()
+
+    if args.lr != None:
+        INITIAL_LR = args.lr
 
     # Generate experiment name and create directories.
     exp_name = get_experiment_name(args)
@@ -430,7 +434,7 @@ def main():
         name=exp_name
     )
     neptune_run["config"] = config
-    print('Init NEPTUNE SUCCESSFULLY!')
+    print('INIT NEPTUNE SUCCESSFULLY!')
 
     dataset_manager = DatasetManager(args.dataset)
     train_loader, test_loader = dataset_manager.get_loaders()
