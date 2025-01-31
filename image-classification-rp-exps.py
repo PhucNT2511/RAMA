@@ -408,7 +408,7 @@ def main():
     parser.add_argument("--use_rp", type=bool, default=False, help="Use randomized projection")
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
     parser.add_argument("--lr", type=float, default=None, help="Initial learning rate")
-    parser.add_argument("--epoch", type=float, default=None, help="Initial epochs")
+    parser.add_argument("--epoch", type=int, default=None, help="Initial epochs")
     args = parser.parse_args()
 
     global INITIAL_LR
