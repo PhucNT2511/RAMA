@@ -408,11 +408,16 @@ def main():
     parser.add_argument("--use_rp", type=bool, default=False, help="Use randomized projection")
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
     parser.add_argument("--lr", type=float, default=None, help="Initial learning rate")
+    parser.add_argument("--epoch", type=float, default=None, help="Initial epochs")
     args = parser.parse_args()
 
     global INITIAL_LR
     if args.lr is not None:
         INITIAL_LR = args.lr
+
+    global EPOCHS
+    if args.epoch is not None:
+        EPOCHS = args.epoch
 
     # Generate experiment name and create directories.
     exp_name = get_experiment_name(args)
