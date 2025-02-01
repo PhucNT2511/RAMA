@@ -314,6 +314,8 @@ class Trainer:
             running_loss += loss.item() * inputs.size(0)
             correct += outputs.max(1)[1].eq(labels).sum().item()
             total += labels.size(0)
+            del inputs, labels, outputs
+            torch.cuda.empty_cache()
 
         epoch_loss = running_loss / total
         epoch_acc = 100. * correct / total
