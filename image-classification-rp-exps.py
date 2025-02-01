@@ -409,6 +409,7 @@ def main():
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
     parser.add_argument("--lr", type=float, default=None, help="Initial learning rate")
     parser.add_argument("--epoch", type=int, default=None, help="Initial epochs")
+    parser.add_argument("--bs", type=int, default=None, help="Initial batch_size")
     args = parser.parse_args()
 
     global INITIAL_LR
@@ -418,6 +419,10 @@ def main():
     global EPOCHS
     if args.epoch is not None:
         EPOCHS = args.epoch
+
+    global BATCH_SIZE
+    if args.bs is not None:
+        BATCH_SIZE = args.bs
 
     # Generate experiment name and create directories.
     exp_name = get_experiment_name(args)
