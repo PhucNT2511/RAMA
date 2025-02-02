@@ -362,9 +362,11 @@ class Trainer:
                         f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
             if (epoch + 1) % 10 == 0:
                 self.save_checkpoint(epoch)
+            '''
             if val_acc > best_acc:
                 best_acc = val_acc
                 self.save_checkpoint(epoch, is_best=True)
+            '''
 
 
 def get_experiment_name(args: argparse.Namespace) -> str:
