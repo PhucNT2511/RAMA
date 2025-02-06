@@ -103,9 +103,10 @@ class DatasetManager:
 
         elif self.dataset_type == DatasetType.OMNIBENCHMARK:
             transform = transforms.Compose([
+                transforms.Grayscale(num_output_channels=3),
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5], std=[0.5]),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ])
 
             train_dataset = torchvision.datasets.Omniglot(root="./data", background=True, download=True,
@@ -176,7 +177,7 @@ class ClassificationModel(nn.Module):
         if model_type == ModelType.RESNET50:
             base_model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
             base_model.conv1 = nn.Sequential(
-                nn.Conv2d(NUM_INPUT_CHANNELS, 64, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
                 nn.BatchNorm2d(64),
                 nn.ReLU(inplace=True)
             )
@@ -432,9 +433,11 @@ def main():
     if args.bs is not None:
         BATCH_SIZE = args.bs
 
+    '''
     global NUM_INPUT_CHANNELS
     if args.dataset == "OmniBenchmark":
         NUM_INPUT_CHANNELS = 1
+    '''
 
     # Generate experiment name and create directories.
     exp_name = get_experiment_name(args)
