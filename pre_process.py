@@ -30,6 +30,7 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         path = self.path[idx]
         label = self.label[idx]
+        path = os.path.join('RAMA',path)
         img = Image.open(path).convert('RGB')
 
         if self.transform is not None:
