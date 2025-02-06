@@ -414,6 +414,7 @@ def main():
     parser.add_argument("--lr", type=float, default=None, help="Initial learning rate")
     parser.add_argument("--epoch", type=int, default=None, help="Initial epochs")
     parser.add_argument("--bs", type=int, default=None, help="Initial batch_size")
+    parser.add_argument("--num_classes", type=int, default=100, help="Initial num_classes")
     args = parser.parse_args()
 
     global INITIAL_LR
@@ -455,7 +456,7 @@ def main():
     train_loader, test_loader = dataset_manager.get_loaders()
     model = ClassificationModel(
         model_type=args.model,
-        num_classes=1000,
+        num_classes=args.num_classes,
         use_rp=args.use_rp,
         lambda_value=args.lambda_value
     )
