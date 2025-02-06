@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.models import resnet50, vgg16, ResNet50_Weights, VGG16_Weights
 from transformers import ViTModel, ViTConfig, ViTForImageClassification
+from pre_process import ImageDataset
 import neptune
 
 # Setup logging
@@ -96,8 +97,9 @@ class DatasetManager:
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ])
 
-            train_dataset = torchvision.datasets.ImageNet(root="./data", split="train", transform=transform)
-            test_dataset = torchvision.datasets.ImageNet(root="./data", split="val", transform=transform)
+            train_dataset = ImageDataset(mode="train", transform=transform)
+            test_dataset = ImageDataset(mode="test", transform=transform)
+
         elif self.dataset_type == DatasetType.OMNIBENCHMARK:
             transform = transforms.Compose([
                 transforms.Resize((224, 224)),
