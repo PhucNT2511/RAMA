@@ -455,7 +455,7 @@ def main():
     train_loader, test_loader = dataset_manager.get_loaders()
     model = ClassificationModel(
         model_type=args.model,
-        num_classes=100,
+        num_classes=1000,
         use_rp=args.use_rp,
         lambda_value=args.lambda_value
     )
