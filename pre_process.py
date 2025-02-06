@@ -9,7 +9,7 @@ import random
 import numpy as np
 import pandas as pd
 
-total_path = pd.read_csv('RAMA/meta_data.csv')
+total_path = pd.read_csv('/kaggle/working/RAMA/meta_data.csv')
 
 class ImageDataset(Dataset):
     def __init__(self, mode = "train", transform=None):
@@ -30,7 +30,6 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         path = self.path[idx]
         label = self.label[idx]
-        path = os.path.join('RAMA',path)
         img = Image.open(path).convert('RGB')
 
         if self.transform is not None:
