@@ -9,7 +9,7 @@ import random
 import numpy as np
 import pandas as pd
 
-total_path = pd.read_csv('RAMA/meta_data.csv')
+total_path = pd.read_csv('meta_data.csv')
 
 class ImageDataset(Dataset):
     def __init__(self, mode = "train", transform=None):
