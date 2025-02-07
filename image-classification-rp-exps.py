@@ -90,16 +90,22 @@ class DatasetManager:
             test_dataset = torchvision.datasets.CIFAR100(root="./data", train=False,
                                                          download=True, transform=transform_test)
         elif self.dataset_type == DatasetType.IMAGENET_A:
-            transform = transforms.Compose([
+            transform_train = transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ])
+            transform_test = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
 
-            train_dataset = ImageDataset(mode="train", transform=transform)
-            test_dataset = ImageDataset(mode="test", transform=transform)
+            train_dataset = ImageDataset(mode="train", transform=transform_train)
+            test_dataset = ImageDataset(mode="test", transform=transform_test)
 
         elif self.dataset_type == DatasetType.OMNIBENCHMARK:
             transform = transforms.Compose([
