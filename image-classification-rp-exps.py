@@ -33,13 +33,16 @@ logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 128
 EPOCHS = 200
-INITIAL_LR = 0.1
+INITIAL_LR = 1e-3 # AdamW - 1e-3 / SGD - 0.1
 MOMENTUM = 0.9
-WEIGHT_DECAY = 5e-4
+WEIGHT_DECAY = 1e-5 #AdamW - 1e-5 / SGD - 5e-4
 NESTEROV = True
 WARMUP_EPOCHS = 5
 NUM_INPUT_CHANNELS = 3
 
+BETA1 = 0.9
+BETA2 = 0.999
+EPSILON = 1e-8
 
 class ModelType(Enum):
     """Supported model architectures."""
@@ -262,6 +265,7 @@ class Trainer:
         self.neptune_run = neptune_run
         self.checkpoint_dir = os.path.join(exp_dir, "checkpoints")
         self.criterion = nn.CrossEntropyLoss()
+        '''
         self.optimizer = optim.SGD(
             model.parameters(),
             lr=INITIAL_LR,
@@ -280,6 +284,9 @@ class Trainer:
             final_div_factor=1e4,
             anneal_strategy='cos'
         )
+        '''
+        self.optimizer = optim.Adam(model.parameters(), lr=INITIAL_LR, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=30, gamma=0.1)
 
     def save_checkpoint(self, epoch: int, is_best: bool = False):
         """Save model checkpoint."""
@@ -302,10 +309,12 @@ class Trainer:
         
         for i, (inputs, labels) in enumerate(self.train_loader):
             inputs, labels = inputs.to(self.device), labels.to(self.device)
+            '''
             if epoch < WARMUP_EPOCHS:
                 scale = min(1., float(epoch * len(self.train_loader) + i + 1) / float(WARMUP_EPOCHS * len(self.train_loader)))
                 for group in self.optimizer.param_groups:
                     group["lr"] = scale * INITIAL_LR
+            '''
 
             self.optimizer.zero_grad()
             outputs = self.model(inputs)
