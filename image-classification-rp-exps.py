@@ -255,8 +255,8 @@ class Trainer:
             neptune_run: Neptune.ai run instance
         """
         self.model = model.to(device)
-        self.train_loader = train_loader.to(device)
-        self.test_loader = test_loader.to(device)
+        self.train_loader = train_loader
+        self.test_loader = test_loader
         self.device = device
         self.exp_dir = exp_dir
         self.neptune_run = neptune_run
