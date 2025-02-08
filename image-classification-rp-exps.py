@@ -69,8 +69,6 @@ class DatasetManager:
         if self.dataset_type == DatasetType.CIFAR100:
             transform_train = transforms.Compose([
                 transforms.RandomCrop(32, padding=4, padding_mode="reflect"),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomVerticalFlip(p=0.5),
                 transforms.AutoAugment(transforms.AutoAugmentPolicy.CIFAR10),
                 transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
                 transforms.ToTensor(),
