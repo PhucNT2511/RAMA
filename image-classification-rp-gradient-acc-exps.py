@@ -442,16 +442,13 @@ def main():
         "epochs": args.epochs,
         "warmup_epochs": args.warmup_epochs
     }
-    NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PROJECT")
-    NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN")
-    neptune_run = None
-    if NEPTUNE_PRJ_NAME and NEPTUNE_API_TOKEN:
-        neptune_run = neptune.init_run(
-            project=NEPTUNE_PRJ_NAME,
-            api_token=NEPTUNE_API_TOKEN,
-            name=exp_name
-        )
-        neptune_run["config"] = config
+    
+    neptune_run = neptune.init_run(
+        project="phuca1tt1bn/RAMA2",
+        api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ==",
+        name=exp_name
+    )
+    neptune_run["config"] = config
 
     dataset_manager = DatasetManager(args.dataset)
     train_loader, test_loader = dataset_manager.get_loaders(batch_size=args.batch_size)
