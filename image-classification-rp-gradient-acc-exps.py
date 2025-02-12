@@ -462,6 +462,7 @@ def main():
         lambda_value=args.lambda_value,
         num_input_channels= 1 if args.dataset == "OmniBenchmark" else 3
     )
+    print(model)
     logger.info(f"Model initialized: {model}")
     trainer = Trainer(
         model,
