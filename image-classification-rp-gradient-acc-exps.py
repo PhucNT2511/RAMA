@@ -163,7 +163,7 @@ class ClassificationModel(nn.Module):
         if model_type == ModelType.RESNET50:
             base_model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
             base_model.conv1 = nn.Sequential(
-                nn.Conv2d(self.num_input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
                 nn.BatchNorm2d(64),
                 nn.ReLU(inplace=True)
             )
@@ -175,7 +175,7 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
         elif model_type == ModelType.VGG16:
             base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
-            base_model.features[0] = nn.Conv2d(self.num_input_channels, 64, kernel_size=3, padding=1)
+            base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)
             self.features = nn.Sequential(
                 base_model.features,
                 nn.AdaptiveAvgPool2d((1, 1))
