@@ -445,7 +445,7 @@ def main():
     }
     
     neptune_run = neptune.init_run(
-        project="phuca1tt1bn/RAMA2",
+        project="phuca1tt1bn/RAMA",
         api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ==",
         name=exp_name
     )
