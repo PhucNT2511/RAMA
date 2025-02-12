@@ -421,6 +421,7 @@ def main():
     parser.add_argument("--weight_decay", type=float, default=5e-4, help="Weight decay coefficient")
     parser.add_argument("--nesterov", type=bool, default=True, help="Use Nesterov momentum")
     parser.add_argument("--warmup_epochs", type=int, default=5, help="Number of warmup epochs")
+    parser.add_argument("--num_classes", type=int, default=100, help="Number of classes")
     args = parser.parse_args()
 
     exp_name = get_experiment_name(args)
@@ -454,7 +455,7 @@ def main():
     train_loader, test_loader = dataset_manager.get_loaders(batch_size=args.batch_size)
     model = ClassificationModel(
         model_type=args.model,
-        num_classes=100,
+        num_classes=args.num_classes,
         use_rp=args.use_rp,
         lambda_value=args.lambda_value
     )
