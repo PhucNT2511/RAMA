@@ -88,6 +88,7 @@ class DatasetManager:
             test_dataset = torchvision.datasets.ImageNet(root="./data", split="val", transform=transform)
         elif self.dataset_type == DatasetType.OMNIBENCHMARK:
             transform = transforms.Compose([
+                transforms.Grayscale(num_output_channels=3),
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
@@ -158,7 +159,7 @@ class ClassificationModel(nn.Module):
         super().__init__()
         self.use_rp = use_rp
         self.lambda_value = lambda_value
-        self.num_input_channels = num_input_channels
+        
         if model_type == ModelType.RESNET50:
             base_model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
             base_model.conv1 = nn.Sequential(
