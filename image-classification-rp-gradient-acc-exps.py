@@ -36,9 +36,9 @@ class ModelType(Enum):
 
 class DatasetType(Enum):
     """Supported datasets."""
-    CIFAR100 = "CIFAR100"
-    IMAGENET_A = "ImageNet-A"
-    OMNIBENCHMARK = "OmniBenchmark"
+    CIFAR100 = "CIFAR100" #100
+    IMAGENET_A = "ImageNet-A" #1000
+    OMNIBENCHMARK = "OmniBenchmark" #1623
 
 
 class DatasetManager:
@@ -147,7 +147,7 @@ class ClassificationModel(nn.Module):
     """Classification model with configurable architecture."""
     
     def __init__(self, model_type: ModelType, num_classes: int, use_rp: bool = False,
-                 lambda_value: Optional[float] = None):
+                 lambda_value: Optional[float] = None, num_input_channels: int = 3):
         """
         Args:
             model_type: Type of base model architecture
@@ -158,10 +158,11 @@ class ClassificationModel(nn.Module):
         super().__init__()
         self.use_rp = use_rp
         self.lambda_value = lambda_value
+        self.num_input_channels = num_input_channels
         if model_type == ModelType.RESNET50:
             base_model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
             base_model.conv1 = nn.Sequential(
-                nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.Conv2d(self.num_input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False),
                 nn.BatchNorm2d(64),
                 nn.ReLU(inplace=True)
             )
@@ -173,7 +174,7 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
         elif model_type == ModelType.VGG16:
             base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
-            base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)
+            base_model.features[0] = nn.Conv2d(self.num_input_channels, 64, kernel_size=3, padding=1)
             self.features = nn.Sequential(
                 base_model.features,
                 nn.AdaptiveAvgPool2d((1, 1))
@@ -453,11 +454,13 @@ def main():
 
     dataset_manager = DatasetManager(args.dataset)
     train_loader, test_loader = dataset_manager.get_loaders(batch_size=args.batch_size)
+
     model = ClassificationModel(
         model_type=args.model,
         num_classes=args.num_classes,
         use_rp=args.use_rp,
-        lambda_value=args.lambda_value
+        lambda_value=args.lambda_value,
+        num_input_channels= 1 if args.dataset == "OmniBenchmark" else 3
     )
     logger.info(f"Model initialized: {model}")
     trainer = Trainer(
