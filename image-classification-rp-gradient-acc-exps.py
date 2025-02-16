@@ -531,7 +531,7 @@ def main():
         lambda_value=args.lambda_value,
         use_cnn_rp = args.use_cnn_rp,
         cnn_lambda_value = args.cnn_lambda_value,
-        num_input_channels= 1 if args.dataset == "OmniBenchmark" else 3
+        num_input_channels= 1 if args.dataset.value == "OmniBenchmark" else 3
     )
     print(model)
     logger.info(f"Model initialized: {model}")
