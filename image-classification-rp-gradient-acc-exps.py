@@ -163,6 +163,7 @@ class CNNRandomProjection(nn.Module):
 
     def forward(self, x):
         #print(x.device)
+        print(x.shape)
         for i in range(len(self.random_projection)):
             for j in range(self.W):
                 x[i,:,j] = self.random_projection[i](x[i,:,j])
