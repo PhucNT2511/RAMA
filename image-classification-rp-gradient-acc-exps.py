@@ -163,10 +163,10 @@ class CNNRandomProjection(nn.Module):
 
     def forward(self, x):
         #print(x.device)
-        print(x.shape)
+        #print(x.shape)
         for i in range(len(self.random_projection)):
             for j in range(self.W):
-                x[i,:,j] = self.random_projection[i](x[i,:,j])
+                x[:,i,:,j] = self.random_projection[i](x[:,i,:,j])
         x = self.lambda_param*self.sqrt_d*x    
         x = nn.functional.leaky_relu(x, negative_slope = 0.2)
         x = self.batch_norm(x)
