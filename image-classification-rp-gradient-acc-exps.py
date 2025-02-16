@@ -88,7 +88,6 @@ class DatasetManager:
             test_dataset = torchvision.datasets.ImageNet(root="./data", split="val", transform=transform)
         elif self.dataset_type == DatasetType.OMNIBENCHMARK:
             transform = transforms.Compose([
-                transforms.Grayscale(num_output_channels=3),
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
@@ -142,13 +141,42 @@ class RanPACLayer(nn.Module):
         x = nn.functional.leaky_relu(x, negative_slope=0.2)
         x = self.norm(x)
         return x
+    
+class CNNRandomProjection(nn.Module):
+    def __init__(self, C, H, W, lambda_value = None):
+        super(CNNRandomProjection, self).__init__()
+        # Tạo ma trận random với kích thước (C, H, W)
+        self.random_projection = []
+        for i in C:
+            linear_matrix = nn.Linear(H, H, bias=False)
+            linear_matrix.weight.requires_grad = False 
+            nn.init.normal_(linear_matrix.weight, mean=0, std=1.0)
+            self.random_projection.append(linear_matrix)
+        if lambda_value:
+            self.sqrt_d = H
+            self.lambda_param = lambda_value  
+        else:
+            self.sqrt_d = 1
+            self.lambda_param = nn.Parameter(torch.FloatTensor([1e-3])) 
+        self.batch_norm = nn.BatchNorm2d(C)
+        self.W = W
+
+    def forward(self, x):
+        for i in range(len(self.random_projection)):
+            for j in self.W:
+                x[i,:,j] = self.random_projection[i](x[i,:,j])
+        x = self.lambda_param*self.sqrt_d*x    
+        x = nn.functional.leaky_relu(x, negative_slope = 0.2)
+        x = self.batch_norm(x)
+        return x
 
 
 class ClassificationModel(nn.Module):
     """Classification model with configurable architecture."""
     
     def __init__(self, model_type: ModelType, num_classes: int, use_rp: bool = False,
-                 lambda_value: Optional[float] = None, num_input_channels: int = 3):
+                 lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
+                 cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3):
         """
         Args:
             model_type: Type of base model architecture
@@ -159,23 +187,56 @@ class ClassificationModel(nn.Module):
         super().__init__()
         self.use_rp = use_rp
         self.lambda_value = lambda_value
-        
+        self.use_cnn_rp = use_cnn_rp
+        self.cnn_lambda_value = cnn_lambda_value
+
         if model_type == ModelType.RESNET50:
-            base_model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
-            base_model.conv1 = nn.Sequential(
-                nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
-                nn.BatchNorm2d(64),
-                nn.ReLU(inplace=True)
-            )
+            if num_input_channels == 3:
+                base_model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+                base_model.conv1 = nn.Sequential(
+                    nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True)
+                )
+            elif num_input_channels == 1:
+                base_model = resnet50()
+                base_model.conv1 = nn.Sequential(
+                    nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True)
+                )
             base_model.maxpool = nn.Identity()
             self.features = nn.Sequential(
-                *list(base_model.children())[:-1],
-                nn.Dropout(0.3)
+                base_model.conv1,    
+                base_model.bn1,
+                base_model.relu,        
+                base_model.maxpool,
+                base_model.layer1,
+                base_model.layer2,
+                base_model.layer3,
+                base_model.layer4,
+            )
+            self.features2 = nn.Sequential(
+                base_model.avgpool
             )
             self.feature_dim = base_model.fc.in_features
+
         elif model_type == ModelType.VGG16:
-            base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
-            base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)
+            if num_input_channels == 3:
+                base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
+                base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)
+                self.features = nn.Sequential(
+                    base_model.features,
+                    nn.AdaptiveAvgPool2d((1, 1))
+                )
+            elif num_input_channels == 1:
+                base_model = vgg16()
+                base_model.features[0] = nn.Conv2d(1, 64, kernel_size=3, padding=1)
+                self.features = nn.Sequential(
+                    base_model.features,
+                    nn.AdaptiveAvgPool2d((1, 1))
+                )
+           
             self.features = nn.Sequential(
                 base_model.features,
                 nn.AdaptiveAvgPool2d((1, 1))
@@ -185,7 +246,7 @@ class ClassificationModel(nn.Module):
             self.config = ViTConfig(
                 image_size=32,
                 patch_size=4,
-                num_channels=3,
+                num_channels=num_input_channels,
                 num_labels=num_classes,
                 hidden_size=768,
                 num_hidden_layers=12,
@@ -212,14 +273,20 @@ class ClassificationModel(nn.Module):
 
         if use_rp:
             self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
+        if use_cnn_rp:
+            self.cnn_rp = CNNRandomProjection(2048,1,1,self.cnn_lambda_value)
         self.fc = nn.Linear(self.feature_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model."""
         x = self.features(x)
+        if self.use_cnn_rp:
+            x = self.cnn_rp(x)
+
         if isinstance(self.features, ViTModel):
-            x = x.last_hidden_state[:, 0, :]
+            x = x.last_hidden_state[:, 0, :] ### Take the first element, [CLS] token
         else:
+            x = self.features2(x)
             x = torch.flatten(x, 1)
 
         if self.use_rp:
@@ -413,7 +480,8 @@ def main():
     parser.add_argument("--dataset", type=DatasetType, choices=list(DatasetType), required=True, help="Dataset type")
     parser.add_argument("--use_rp", type=bool, default=False, help="Use randomized projection")
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
-    
+    parser.add_argument("--use_cnn_rp", type=bool, default=False, help="Use randomized projection for CNN layer")
+    parser.add_argument("--cnn_lambda_value", type=float, default=None, help="Lambda value for RP in CNN layer")
     # Training hyperparameters
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size per GPU")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of steps to accumulate gradients")
@@ -461,6 +529,8 @@ def main():
         num_classes=args.num_classes,
         use_rp=args.use_rp,
         lambda_value=args.lambda_value,
+        use_cnn_rp = args.use_cnn_rp,
+        cnn_lambda_value = args.cnn_lambda_value,
         num_input_channels= 1 if args.dataset == "OmniBenchmark" else 3
     )
     print(model)
