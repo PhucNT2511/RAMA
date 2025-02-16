@@ -275,7 +275,7 @@ class ClassificationModel(nn.Module):
         if use_rp:
             self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
         if use_cnn_rp:
-            self.cnn_rp = CNNRandomProjection(2048,1,1,self.cnn_lambda_value)
+            self.cnn_rp = CNNRandomProjection(2048,4,4,self.cnn_lambda_value)
         self.fc = nn.Linear(self.feature_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
