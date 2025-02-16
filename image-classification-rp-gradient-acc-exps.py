@@ -146,7 +146,7 @@ class CNNRandomProjection(nn.Module):
     def __init__(self, C, H, W, lambda_value = None):
         super(CNNRandomProjection, self).__init__()
         # Tạo ma trận random với kích thước (C, H, W)
-        self.random_projection = []
+        self.random_projection = nn.ModuleList()
         for i in range(C):
             linear_matrix = nn.Linear(H, H, bias=False)
             linear_matrix.weight.requires_grad = False 
@@ -162,10 +162,9 @@ class CNNRandomProjection(nn.Module):
         self.W = W
 
     def forward(self, x):
-        print(x.device)
+        #print(x.device)
         for i in range(len(self.random_projection)):
             for j in range(self.W):
-                print(x[i,:,j].device)
                 x[i,:,j] = self.random_projection[i](x[i,:,j])
         x = self.lambda_param*self.sqrt_d*x    
         x = nn.functional.leaky_relu(x, negative_slope = 0.2)
