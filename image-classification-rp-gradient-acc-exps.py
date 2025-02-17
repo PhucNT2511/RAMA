@@ -162,15 +162,15 @@ class CNNRandomProjection(nn.Module):
         self.W = W
 
     def forward(self, x):
-        #print(x.device)
-        #print(x.shape)
+        x_new = x.clone()
         for i in range(len(self.random_projection)):
             for j in range(self.W):
-                x[:,i,:,j] = self.random_projection[i](x[:,i,:,j])
-        x = self.lambda_param*self.sqrt_d*x    
-        x = nn.functional.leaky_relu(x, negative_slope = 0.2)
-        x = self.batch_norm(x)
-        return x
+                proj_val = self.random_projection[i](x[:, i, :, j])
+                x_new[:, i, :, j] = proj_val
+        x_new = self.lambda_param * self.sqrt_d * x_new    
+        x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
+        x_new = self.batch_norm(x_new)
+        return x_new
 
 
 class ClassificationModel(nn.Module):
