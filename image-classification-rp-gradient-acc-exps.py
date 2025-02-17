@@ -507,6 +507,8 @@ def main():
         "dataset_type": args.dataset.value,
         "use_rp": args.use_rp,
         "lambda_value": args.lambda_value,
+        "use_cnn_rp": args.use_cnn_rp,
+        "cnn_lambda_value": args.cnn_lambda_value,
         "batch_size": args.batch_size,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "virtual_batch_size": args.batch_size * args.gradient_accumulation_steps,
