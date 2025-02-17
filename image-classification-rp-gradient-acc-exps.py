@@ -455,6 +455,8 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     exp_name = f"{args.model.value}_{args.dataset.value}"
     if args.use_rp:
         exp_name += f"_RP{args.lambda_value}"
+    if args.use_cnn_rp:
+        exp_name += f"_CNN_RP{args.cnn_lambda_value}"
     exp_name += f"_lr{args.initial_lr}_bs{args.batch_size}_g{args.gradient_accumulation_steps}_{timestamp}"
     return exp_name
 
