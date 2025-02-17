@@ -24,6 +24,8 @@ from torchvision.models import resnet50, vgg16, ResNet50_Weights, VGG16_Weights
 from transformers import ViTModel, ViTConfig, ViTForImageClassification
 import neptune
 
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
