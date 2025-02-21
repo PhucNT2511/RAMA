@@ -214,7 +214,7 @@ class ClassificationModel(nn.Module):
             if num_input_channels == 3:
                 base_model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
                 base_model.conv1 = nn.Sequential(
-                    nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
+                    nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
                     nn.BatchNorm2d(64),
                     nn.ReLU(inplace=True)
                 )
