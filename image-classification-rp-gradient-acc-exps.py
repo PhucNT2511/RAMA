@@ -175,7 +175,7 @@ class CNNRandomProjection(nn.Module):
             self.lambda_param = lambda_value  
         else:
             self.sqrt_d = math.sqrt(H) ########## 1 OR sqrt(d)
-            self.lambda_param = nn.Parameter(torch.FloatTensor([0.2])) ### 0.2
+            self.lambda_param = nn.Parameter(torch.FloatTensor([1e-3])) ### 0.2
         self.batch_norm = nn.BatchNorm2d(C)
         self.W = W
 
@@ -214,7 +214,7 @@ class ClassificationModel(nn.Module):
             if num_input_channels == 3:
                 base_model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
                 base_model.conv1 = nn.Sequential(
-                    nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
+                    nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
                     nn.BatchNorm2d(64),
                     nn.ReLU(inplace=True)
                 )
@@ -225,7 +225,7 @@ class ClassificationModel(nn.Module):
                     nn.BatchNorm2d(64),
                     nn.ReLU(inplace=True)
                 )
-            base_model.maxpool = nn.Identity()
+            base_model.maxpool = nn.Identity()   ## Maxpool giữ nguyên --> thử dùng model gốc
             self.features = nn.Sequential(
                 base_model.conv1,    
                 base_model.bn1,
