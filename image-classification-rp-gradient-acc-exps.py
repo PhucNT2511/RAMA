@@ -1,9 +1,9 @@
 """
 Script for training and evaluating image classification models with Random Projecto=ion variations.
-Supports multiple architectures (ResNet50, VGG16, ViT) and Cifar100, ImageNet-A and OmniBenchmark datasets.
+Supports multiple architectures (ResNet18, VGG16, ViT) and Cifar100, ImageNet-A and OmniBenchmark datasets.
 
 Example usage:
-    python image-classification-rp-exps.py --model ResNet50 --dataset CIFAR100 --use_rp True --lambda_value 1e-3
+    python image-classification-rp-exps.py --model ResNet18 --dataset CIFAR100 --use_rp True --lambda_value 1e-3
 """
 
 import argparse
@@ -20,9 +20,12 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import resnet50, vgg16, ResNet50_Weights, VGG16_Weights
+from torchvision.models import resnet18, vgg16, ResNet18_Weights, VGG16_Weights
 from transformers import ViTModel, ViTConfig, ViTForImageClassification
 import neptune
+import random
+import numpy as np
+import math
 
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
@@ -31,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 class ModelType(Enum):
     """Supported model architectures."""
-    RESNET50 = "ResNet50"
+    RESNET18 = "ResNet18"
     VGG16 = "VGG16"
     VIT = "ViT"
 
@@ -41,6 +44,14 @@ class DatasetType(Enum):
     CIFAR100 = "CIFAR100" #100
     IMAGENET_A = "ImageNet-A" #1000
     OMNIBENCHMARK = "OmniBenchmark" #1623
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 class DatasetManager:
@@ -126,7 +137,12 @@ class RanPACLayer(nn.Module):
         self.projection = nn.Linear(input_dim, output_dim, bias=False)
         self.projection.weight.requires_grad = False
         nn.init.normal_(self.projection.weight, mean=0, std=1.0)
-        self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3]))
+        if lambda_value:
+            self.sqrt_d = math.sqrt(input_dim)
+            self.lambda_param = lambda_value  
+        else:
+            self.sqrt_d = math.sqrt(input_dim) ####### 1 OR sqrt(d)
+            self.lambda_param = nn.Parameter(torch.FloatTensor([1e-3]))  ########
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -155,11 +171,11 @@ class CNNRandomProjection(nn.Module):
             nn.init.normal_(linear_matrix.weight, mean=0, std=1.0)
             self.random_projection.append(linear_matrix)
         if lambda_value:
-            self.sqrt_d = H
+            self.sqrt_d = math.sqrt(H)
             self.lambda_param = lambda_value  
         else:
-            self.sqrt_d = 1
-            self.lambda_param = nn.Parameter(torch.FloatTensor([1e-3])) 
+            self.sqrt_d = math.sqrt(H) ########## 1 OR sqrt(d)
+            self.lambda_param = nn.Parameter(torch.FloatTensor([0.2])) ### 0.2
         self.batch_norm = nn.BatchNorm2d(C)
         self.W = W
 
@@ -194,16 +210,16 @@ class ClassificationModel(nn.Module):
         self.use_cnn_rp = use_cnn_rp
         self.cnn_lambda_value = cnn_lambda_value
 
-        if model_type == ModelType.RESNET50:
+        if model_type == ModelType.RESNET18:
             if num_input_channels == 3:
-                base_model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+                base_model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V2)
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
                     nn.BatchNorm2d(64),
                     nn.ReLU(inplace=True)
                 )
             elif num_input_channels == 1:
-                base_model = resnet50()
+                base_model = resnet18()
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False),
                     nn.BatchNorm2d(64),
@@ -217,10 +233,11 @@ class ClassificationModel(nn.Module):
                 base_model.maxpool,
                 base_model.layer1,
                 base_model.layer2,
-                base_model.layer3,
-                base_model.layer4,
+                base_model.layer3,           
             )
+            
             self.features2 = nn.Sequential(
+                base_model.layer4,
                 base_model.avgpool
             )
             self.feature_dim = base_model.fc.in_features
@@ -278,7 +295,7 @@ class ClassificationModel(nn.Module):
         if use_rp:
             self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
         if use_cnn_rp:
-            self.cnn_rp = CNNRandomProjection(2048,4,4,self.cnn_lambda_value)
+            self.cnn_rp = CNNRandomProjection(256,4,4,self.cnn_lambda_value)
         self.fc = nn.Linear(self.feature_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -290,11 +307,11 @@ class ClassificationModel(nn.Module):
         if isinstance(self.features, ViTModel):
             x = x.last_hidden_state[:, 0, :] ### Take the first element, [CLS] token
         else:
-            x = self.features2(x)
-            x = torch.flatten(x, 1)
+            x = self.features2(x) ## avgpool
+            x = torch.flatten(x, 1) 
 
         if self.use_rp:
-            x = self.rp(x)
+            x = self.rp(x) ###
         return self.fc(x)
 
 
@@ -318,7 +335,7 @@ class Trainer:
         self.test_loader = test_loader
         self.device = device
         self.exp_dir = exp_dir
-        self.args = args
+        self.args = args ################
         self.gradient_accumulation_steps = args.gradient_accumulation_steps
         self.neptune_run = neptune_run
         self.checkpoint_dir = os.path.join(exp_dir, "checkpoints")
@@ -398,6 +415,10 @@ class Trainer:
         if self.neptune_run:
             self.neptune_run["Train/Loss"].append(epoch_loss)
             self.neptune_run["Train/Accuracy"].append(epoch_acc)
+            if self.args.use_rp == True and self.args.lambda_value == None:
+                self.neptune_run["Lambda/Linear"].append(self.model.rp.lambda_param)
+            if self.args.use_cnn_rp == True and self.args.cnn_lambda_value == None:
+                self.neptune_run["Lambda/CNN"].append(self.model.cnn_rp.lambda_param)
         return epoch_loss, epoch_acc
 
     def evaluate(self, writer: SummaryWriter, epoch: int) -> Tuple[float, float]:
@@ -481,6 +502,8 @@ def setup_experiment_folders(exp_name: str) -> str:
 
 
 def main():
+    set_seed(42)
+
     """Main entry point for training script."""
     parser = argparse.ArgumentParser()
     # Model and dataset arguments
@@ -563,3 +586,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#### log lambda, survey  --> clip lambda
+#### different position - lay 3, lay 2, lay 1
+#### smaller architecture -- resnet18
+#### column + row -- just column
