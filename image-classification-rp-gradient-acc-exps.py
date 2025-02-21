@@ -141,7 +141,7 @@ class RanPACLayer(nn.Module):
             self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = lambda_value  
         else:
-            self.sqrt_d = math.sqrt(input_dim) ####### 1 OR sqrt(d)
+            self.sqrt_d = 1 ####### 1 OR sqrt(d) - should be 1 because of a vector of 512 dimension is too much
             self.lambda_param = nn.Parameter(torch.FloatTensor([1e-3]))  ########
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
