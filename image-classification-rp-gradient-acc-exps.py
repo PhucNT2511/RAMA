@@ -142,7 +142,7 @@ class RanPACLayer(nn.Module):
             self.lambda_param = lambda_value  
         else:
             self.sqrt_d = 1 ####### 1 OR sqrt(d) - should be 1 because of a vector of 512 dimension is too much
-            self.lambda_param = nn.Parameter(torch.FloatTensor([0.2]))  ########
+            self.lambda_param = nn.Parameter(torch.FloatTensor([0.001]))  ########
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -174,8 +174,8 @@ class CNNRandomProjection(nn.Module):
             self.sqrt_d = math.sqrt(H)
             self.lambda_param = lambda_value  
         else:
-            self.sqrt_d = math.sqrt(H) ########## 1 OR sqrt(d)
-            self.lambda_param = nn.Parameter(torch.FloatTensor([1e-3])) ### 0.2
+            self.sqrt_d = 1 ##########
+            self.lambda_param = nn.Parameter(torch.FloatTensor([0.001])) ### 0.2
         self.batch_norm = nn.BatchNorm2d(C)
         self.W = W
 
@@ -212,7 +212,7 @@ class ClassificationModel(nn.Module):
 
         if model_type == ModelType.RESNET18:
             if num_input_channels == 3:
-                base_model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+                base_model = resnet18()
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
                     nn.BatchNorm2d(64),
