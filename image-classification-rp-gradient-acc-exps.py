@@ -141,8 +141,8 @@ class RanPACLayer(nn.Module):
             self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = lambda_value  
         else:
-            self.sqrt_d = 1 ####### 1 OR sqrt(d) - should be 1 because of a vector of 512 dimension is too much
-            self.lambda_param = nn.Parameter(torch.FloatTensor([0.001]))  ########
+            self.sqrt_d = 1 ####### 1 OR sqrt(d) - should be 1 because a vector of 512 dimension is too much
+            self.lambda_param = nn.Parameter(torch.FloatTensor([1.0]))  ########
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -155,9 +155,9 @@ class RanPACLayer(nn.Module):
         Returns:
             torch.Tensor: Transformed tensor.
         """
-        x = self.projection(x) * self.lambda_param
+        x = self.projection(x) * self.lambda_param * self.sqrt_d
         x = nn.functional.leaky_relu(x, negative_slope=0.2)
-        x = self.norm(x)
+        #x = self.norm(x)
         return x
     
 class CNNRandomProjection(nn.Module):
