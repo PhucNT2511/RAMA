@@ -142,7 +142,7 @@ class RanPACLayer(nn.Module):
             self.lambda_param = lambda_value  
             self.clamp = False
         else:
-            self.lambda_param = nn.Parameter(torch.FloatTensor([0.2]))  ########
+            self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
             self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
@@ -719,3 +719,4 @@ if __name__ == "__main__":
 #### column + row -- just column
 #### Adam
 
+############ Cần sửa lớp features cho VGG16
