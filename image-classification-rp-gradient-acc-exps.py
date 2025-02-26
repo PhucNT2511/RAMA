@@ -137,12 +137,13 @@ class RanPACLayer(nn.Module):
         self.projection = nn.Linear(input_dim, output_dim, bias=False)
         self.projection.weight.requires_grad = False
         nn.init.normal_(self.projection.weight, mean=0, std=1.0)
+        self.sqrt_d = math.sqrt(input_dim)
         if lambda_value:
-            self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = lambda_value  
+            self.clamp = False
         else:
-            self.sqrt_d = 1 ####### 1 OR sqrt(d) - should be 1 because a vector of 512 dimension is too much
-            self.lambda_param = nn.Parameter(torch.FloatTensor([1.0]))  ########
+            self.lambda_param = nn.Parameter(torch.FloatTensor([0.2]))  ########
+            self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -155,11 +156,15 @@ class RanPACLayer(nn.Module):
         Returns:
             torch.Tensor: Transformed tensor.
         """
-        x = self.projection(x) * self.lambda_param * self.sqrt_d
+        if self.clamp:
+            lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=2.0)
+        else:
+            lambda_clamped = self.lambda_param
+        x = self.projection(x) * lambda_clamped  * self.sqrt_d
         x = nn.functional.leaky_relu(x, negative_slope=0.2)
         #x = self.norm(x)
         return x
-    
+'''   
 class CNNRandomProjection(nn.Module):
     def __init__(self, C, H, W, lambda_value = None):
         super(CNNRandomProjection, self).__init__()
@@ -187,8 +192,67 @@ class CNNRandomProjection(nn.Module):
                 x_new[:, i, :, j] = proj_val
         x_new = self.lambda_param * self.sqrt_d * x_new    
         x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
-        x_new = self.batch_norm(x_new)
+        #x_new = self.batch_norm(x_new)
         return x_new
+'''
+class CNNRandomProjection(nn.Module):
+    def __init__(self, C, H, W, lambda_value=None, resemble=False, row=False):
+        super(CNNRandomProjection, self).__init__()
+        self.resemble = resemble
+        self.row = row
+        self.C, self.H, self.W = C, H, W
+
+        # Chọn kích thước của ma trận A
+        size = W if row else H  # W nếu nhân theo hàng, H nếu nhân theo cột
+
+        # Nếu resemble=True: dùng chung 1 ma trận A, nếu False: mỗi kênh có ma trận A riêng
+        if resemble:
+            A = torch.randn(size, size)  # Ma trận A dùng chung
+        else:
+            A = torch.randn(C, size, size)  # Ma trận A riêng cho từng kênh
+
+        A.requires_grad = False
+        self.register_buffer('A', A)  # Lưu A dưới dạng buffer (không cần tính gradient)
+
+        self.sqrt_d = math.sqrt(size)
+
+        if lambda_value is not None:
+            self.lambda_param = lambda_value
+            self.clamp = False
+        else:
+            self.lambda_param = nn.Parameter(torch.tensor(0.2))
+            self.clamp = True
+
+        self.batch_norm = nn.BatchNorm2d(C)
+
+    def forward(self, x):
+        """
+        - Nếu row=True: Áp dụng A trên từng hàng của ảnh (H x H)
+        - Nếu row=False: Áp dụng A trên từng cột của ảnh (W x W)
+        """
+        if self.row:
+            # Nhân theo hàng: (N, C, H, W) → (N, C, H, W) với A kích thước (C, H, H) hoặc (H, H)
+            if self.resemble:
+                x_new = torch.einsum('ik,nchw->nchw', self.A, x)
+            else:
+                x_new = torch.einsum('cik,nchw->nchw', self.A, x)
+        else:
+            # Nhân theo cột: (N, C, H, W) → (N, C, H, W) với A kích thước (C, W, W) hoặc (W, W)
+            if self.resemble:
+                x_new = torch.einsum('ik,nchw->nchw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+            else:
+                x_new = torch.einsum('cik,nchw->nchw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+
+        # Điều chỉnh giá trị lambda
+        lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=3.0) if self.clamp else self.lambda_param
+
+        # Áp dụng scale, kích hoạt và batch normalization
+        x_new = lambda_clamped * self.sqrt_d * x_new
+        x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
+        #x_new = self.batch_norm(x_new)
+        
+        return x_new
+
 
 
 class ClassificationModel(nn.Module):
@@ -196,7 +260,8 @@ class ClassificationModel(nn.Module):
     
     def __init__(self, model_type: ModelType, num_classes: int, use_rp: bool = False,
                  lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
-                 cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3):
+                 cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3,
+                 resemble: bool = False, row: bool = False, pretrained: bool = False):
         """
         Args:
             model_type: Type of base model architecture
@@ -212,7 +277,10 @@ class ClassificationModel(nn.Module):
 
         if model_type == ModelType.RESNET18:
             if num_input_channels == 3:
-                base_model = resnet18()
+                if pretrained:
+                    base_model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+                else:
+                    base_model = resnet18
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
                     nn.BatchNorm2d(64),
@@ -242,9 +310,18 @@ class ClassificationModel(nn.Module):
             )
             self.feature_dim = base_model.fc.in_features
 
+            if use_rp:
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
+            if use_cnn_rp:
+                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row)
+            self.fc = nn.Linear(self.feature_dim, num_classes)
+
         elif model_type == ModelType.VGG16:
             if num_input_channels == 3:
-                base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
+                if pretrained:
+                    base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
+                else:
+                    base_model = vgg16()
                 base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)
                 self.features = nn.Sequential(
                     base_model.features,
@@ -262,7 +339,18 @@ class ClassificationModel(nn.Module):
                 base_model.features,
                 nn.AdaptiveAvgPool2d((1, 1))
             )
+            self.features2 = nn.Sequential(
+                nn.AdaptiveAvgPool2d((1, 1))
+            )
             self.feature_dim = 512
+
+            if use_rp:
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
+            if use_cnn_rp:
+                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row)
+            self.fc = nn.Linear(self.feature_dim, num_classes)
+
+        ########### Chưa điều chỉnh gì ViT
         elif model_type == ModelType.VIT:
             self.config = ViTConfig(
                 image_size=32,
@@ -291,12 +379,6 @@ class ClassificationModel(nn.Module):
             self.feature_dim = self.config.hidden_size
         else:
             raise ValueError(f"Model type {model_type} is not supported.")
-
-        if use_rp:
-            self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
-        if use_cnn_rp:
-            self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value)
-        self.fc = nn.Linear(self.feature_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model."""
@@ -340,24 +422,29 @@ class Trainer:
         self.neptune_run = neptune_run
         self.checkpoint_dir = os.path.join(exp_dir, "checkpoints")
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(
-            model.parameters(),
-            lr=args.initial_lr,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay,
-            nesterov=args.nesterov
-        )
-        total_steps = args.epochs * len(train_loader)
-        warmup_steps = args.warmup_epochs * len(train_loader)
-        self.scheduler = optim.lr_scheduler.OneCycleLR(
-            self.optimizer,
-            max_lr=args.initial_lr,
-            total_steps=total_steps,
-            pct_start=warmup_steps/total_steps,
-            div_factor=10,
-            final_div_factor=1e4,
-            anneal_strategy='cos'
-        )
+        if self.args.optim == 'SGD':
+            self.optimizer = optim.SGD(
+                model.parameters(),
+                lr=args.initial_lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+                nesterov=args.nesterov
+            )
+            total_steps = args.epochs * len(train_loader)
+            warmup_steps = args.warmup_epochs * len(train_loader)
+            self.scheduler = optim.lr_scheduler.OneCycleLR(
+                self.optimizer,
+                max_lr=args.initial_lr,
+                total_steps=total_steps,
+                pct_start=warmup_steps/total_steps,
+                div_factor=10,
+                final_div_factor=1e4,
+                anneal_strategy='cos'
+            )
+        else:
+            self.optimizer = optim.Adam(model.parameters(), lr=args.initial_lr, betas=(args.beta1, args.beta2), eps=args.epsilon, weight_decay=args.weight_decay)
+            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=30, gamma=0.1)
+
 
     def save_checkpoint(self, epoch: int, is_best: bool = False):
         """Save model checkpoint."""
@@ -480,7 +567,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         exp_name += f"_RP{args.lambda_value}"
     if args.use_cnn_rp:
         exp_name += f"_CNN_RP{args.cnn_lambda_value}"
-    exp_name += f"_lr{args.initial_lr}_bs{args.batch_size}_g{args.gradient_accumulation_steps}_{timestamp}"
+    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_row{args.row}_pretrained{args.pretrained}_bs{args.batch_size}_g{args.gradient_accumulation_steps}_{timestamp}"
     return exp_name
 
 
@@ -513,16 +600,29 @@ def main():
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
     parser.add_argument("--use_cnn_rp", type=bool, default=False, help="Use randomized projection for CNN layer")
     parser.add_argument("--cnn_lambda_value", type=float, default=None, help="Lambda value for RP in CNN layer")
+    parser.add_argument("--resemble", type=bool, default=False, help="Same U matrix for RAMA in CNN layer")
+    parser.add_argument("--row", type=bool, default=False, help="Vectorization followed columns or not")
+    parser.add_argument("--pretrained", type=float, default=False, help="Use pre-trained weights")
     # Training hyperparameters
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size per GPU")
+    parser.add_argument("--num_classes", type=int, default=100, help="Number of classes")
+    parser.add_argument("--initial_lr", type=float, default=0.1, help="Initial learning rate") 
+    ###LEARNING_RATE = 1e-05 for Adam, 5e-3 for SGD 
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of steps to accumulate gradients")
     parser.add_argument("--epochs", type=int, default=200, help="Number of training epochs")
-    parser.add_argument("--initial_lr", type=float, default=0.1, help="Initial learning rate")
-    parser.add_argument("--momentum", type=float, default=0.9, help="SGD momentum")
+
+    #Optimization
+    parser.add_argument("--optim", type=str, default='SGD', help="Choose optimization algorithm")
     parser.add_argument("--weight_decay", type=float, default=5e-4, help="Weight decay coefficient")
+    # SGD Optimization
+    parser.add_argument("--momentum", type=float, default=0.9, help="SGD momentum")
     parser.add_argument("--nesterov", type=bool, default=True, help="Use Nesterov momentum")
     parser.add_argument("--warmup_epochs", type=int, default=5, help="Number of warmup epochs")
-    parser.add_argument("--num_classes", type=int, default=100, help="Number of classes")
+    # Adam Optimization
+    parser.add_argument("--beta1", type=float, default=0.9, help="Beta1 in Adam")
+    parser.add_argument("--beta2", type=float, default=0.999, help="Beta2 in Adam")
+    parser.add_argument("--epsilon", type=float, default=1e-8, help="epsilon in Adam")
+    
     args = parser.parse_args()
 
     exp_name = get_experiment_name(args)
@@ -540,13 +640,25 @@ def main():
         "gradient_accumulation_steps": args.gradient_accumulation_steps,
         "virtual_batch_size": args.batch_size * args.gradient_accumulation_steps,
         "learning_rate": args.initial_lr,
-        "momentum": args.momentum,
-        "weight_decay": args.weight_decay,
-        "nesterov": args.nesterov,
         "epochs": args.epochs,
-        "warmup_epochs": args.warmup_epochs
     }
-    
+    if args.optim == 'SGD':
+        config.update({     "momentum": args.momentum,
+                            "weight_decay": args.weight_decay,
+                            "nesterov": args.nesterov,
+                            "warmup_epochs": args.warmup_epochs,
+                            "optim": args.optim
+                    })
+    else:
+        args.weight_decay = 1e-5
+        config.update({   
+                            "weight_decay": args.weight_decay,
+                            "beta1": args.beta1,
+                            "beta2": args.beta2,
+                            "epsilon": args.epsilon,
+                            "optim": args.optim
+                    })
+
     neptune_run = neptune.init_run(
         project="phuca1tt1bn/RAMA",
         api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ==",
@@ -564,8 +676,12 @@ def main():
         lambda_value=args.lambda_value,
         use_cnn_rp = args.use_cnn_rp,
         cnn_lambda_value = args.cnn_lambda_value,
-        num_input_channels= 1 if args.dataset.value == "OmniBenchmark" else 3
+        num_input_channels= 1 if args.dataset.value == "OmniBenchmark" else 3,
+        resemble = args.resemble,
+        row = args.row,
+        pretrained = args.pretrained,
     )
+
     print(model)
     logger.info(f"Model initialized: {model}")
     trainer = Trainer(
@@ -577,6 +693,7 @@ def main():
         args=args,
         neptune_run=neptune_run
     )
+
     writer = SummaryWriter(log_dir=os.path.join(exp_dir, "logs"))
     trainer.train(writer, epochs=args.epochs)
     writer.close()
@@ -591,3 +708,5 @@ if __name__ == "__main__":
 #### different position - lay 3, lay 2, lay 1
 #### smaller architecture -- resnet18
 #### column + row -- just column
+#### Adam
+
