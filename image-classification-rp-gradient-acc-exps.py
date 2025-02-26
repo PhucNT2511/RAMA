@@ -468,7 +468,8 @@ class Trainer:
         
         for i, (inputs, labels) in enumerate(self.train_loader):
             inputs, labels = inputs.to(self.device), labels.to(self.device)
-            if epoch < self.args.warmup_epochs:
+            if self.args.optim == 'SGD':
+                if epoch < self.args.warmup_epochs:
                 scale = min(1., float(epoch * len(self.train_loader) + i + 1) / 
                           float(self.args.warmup_epochs * len(self.train_loader)))
                 for group in self.optimizer.param_groups:
