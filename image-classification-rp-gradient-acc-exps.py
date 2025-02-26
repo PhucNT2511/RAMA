@@ -195,8 +195,13 @@ class CNNRandomProjection(nn.Module):
         #x_new = self.batch_norm(x_new)
         return x_new
 '''
+################# Lỗi trong tính ma trận
 class CNNRandomProjection(nn.Module):
     def __init__(self, C, H, W, lambda_value=None, resemble=False, row=False):
+        '''
+        row: use row vectors, else use column vectors
+        resemble: use the same matrix U for all channels
+        '''
         super(CNNRandomProjection, self).__init__()
         self.resemble = resemble
         self.row = row
@@ -227,27 +232,27 @@ class CNNRandomProjection(nn.Module):
 
     def forward(self, x):
         """
-        - Nếu row=True: Áp dụng A trên từng hàng của ảnh (H x H)
-        - Nếu row=False: Áp dụng A trên từng cột của ảnh (W x W)
+        - Nếu row=True: Áp dụng A trên từng hàng của ảnh (Wx1)
+        - Nếu row=False: Áp dụng A trên từng cột của ảnh (Hx1)
         """
-        if self.row:
-            # Nhân theo hàng: (N, C, H, W) → (N, C, H, W) với A kích thước (C, H, H) hoặc (H, H)
+        if not self.row:
+            # Nhân theo cột (N,C,:,W)
             if self.resemble:
-                x_new = torch.einsum('ik,nchw->nchw', self.A, x)
+                x_new = torch.einsum('ih,nchw->nciw', self.A, x)
             else:
-                x_new = torch.einsum('cik,nchw->nchw', self.A, x)
+                x_new = torch.einsum('cih,nchw->nciw', self.A, x)
         else:
-            # Nhân theo cột: (N, C, H, W) → (N, C, H, W) với A kích thước (C, W, W) hoặc (W, W)
+            # Nhân theo hàng (N,C,H,:) - permute
             if self.resemble:
-                x_new = torch.einsum('ik,nchw->nchw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+                x_new = torch.einsum('ih,nchw->nciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
             else:
-                x_new = torch.einsum('cik,nchw->nchw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+                x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
 
         # Điều chỉnh giá trị lambda
         lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=3.0) if self.clamp else self.lambda_param
 
         # Áp dụng scale, kích hoạt và batch normalization
-        x_new = lambda_clamped * self.sqrt_d * x_new
+        x_new = x_new * lambda_clamped * self.sqrt_d
         x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
         #x_new = self.batch_norm(x_new)
         
@@ -443,7 +448,7 @@ class Trainer:
             )
         else:
             self.optimizer = optim.Adam(model.parameters(), lr=args.initial_lr, betas=(args.beta1, args.beta2), eps=args.epsilon, weight_decay=args.weight_decay)
-            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=30, gamma=0.1)
+            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=30, gamma=0.1) ## epoch-based
 
 
     def save_checkpoint(self, epoch: int, is_best: bool = False):
@@ -487,13 +492,15 @@ class Trainer:
             if (i + 1) % self.gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
-                self.scheduler.step()
+                if self.args.optim == 'SGD':
+                    self.scheduler.step()
                 self.optimizer.zero_grad()
 
         if len(self.train_loader) % self.gradient_accumulation_steps != 0:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
-            self.scheduler.step()
+            if self.args.optim == 'SGD':
+                    self.scheduler.step()
             self.optimizer.zero_grad()
 
         epoch_loss = running_loss / total
@@ -539,7 +546,8 @@ class Trainer:
         for epoch in range(epochs):
             train_loss, train_acc = self.train_one_epoch(writer, epoch)
             val_loss, val_acc = self.evaluate(writer, epoch)
-
+            if self.args.optim == "Adam":
+                self.scheduler.step()
             logger.info(f"Epoch {epoch+1}/{epochs}: "
                         f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
                         f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
