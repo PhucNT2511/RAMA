@@ -470,10 +470,10 @@ class Trainer:
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             if self.args.optim == 'SGD':
                 if epoch < self.args.warmup_epochs:
-                scale = min(1., float(epoch * len(self.train_loader) + i + 1) / 
-                          float(self.args.warmup_epochs * len(self.train_loader)))
-                for group in self.optimizer.param_groups:
-                    group["lr"] = scale * self.args.initial_lr
+                    scale = min(1., float(epoch * len(self.train_loader) + i + 1) / 
+                            float(self.args.warmup_epochs * len(self.train_loader)))
+                    for group in self.optimizer.param_groups:
+                        group["lr"] = scale * self.args.initial_lr
 
             outputs = self.model(inputs)
             loss = self.criterion(outputs, labels)
