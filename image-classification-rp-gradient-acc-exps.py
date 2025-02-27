@@ -616,7 +616,7 @@ def main():
     parser.add_argument("--cnn_lambda_value", type=float, default=None, help="Lambda value for RP in CNN layer")
     parser.add_argument("--resemble", type=bool, default=False, help="Same U matrix for RAMA in CNN layer")
     parser.add_argument("--row", type=bool, default=False, help="Vectorization followed columns or not")
-    parser.add_argument("--pretrained", type=float, default=False, help="Use pre-trained weights")
+    parser.add_argument("--pretrained", type=bool, default=False, help="Use pre-trained weights")
     # Training hyperparameters
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size per GPU")
     parser.add_argument("--num_classes", type=int, default=100, help="Number of classes")
