@@ -138,11 +138,12 @@ class RanPACLayer(nn.Module):
         self.projection = nn.Linear(input_dim, output_dim, bias=False)
         self.projection.weight.requires_grad = False
         nn.init.normal_(self.projection.weight, mean=0, std=1.0)
-        self.sqrt_d = math.sqrt(input_dim)
         if lambda_value:
+            self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = lambda_value  
             self.clamp = False
         else:
+            self.sqrt_d = 1
             self.lambda_param = nn.Parameter(torch.tensor(1.0))  ########
             self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
@@ -258,6 +259,7 @@ class CNNRandomProjection(nn.Module):
         
         return x_new
 
+### Torch sẽ tự khởi tạo, ko cần thiết
 def init_weights(m):
     """Hàm khởi tạo trọng số cho các layer."""
     if isinstance(m, nn.Conv2d):
@@ -295,7 +297,6 @@ class ClassificationModel(nn.Module):
                     base_model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
                 else:
                     base_model = resnet18()
-                    base_model.apply(init_weights)
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
                     nn.BatchNorm2d(64),
@@ -303,7 +304,6 @@ class ClassificationModel(nn.Module):
                 )
             elif num_input_channels == 1:
                 base_model = resnet18()
-                base_model.apply(init_weights)
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False),
                     nn.BatchNorm2d(64),
@@ -338,11 +338,9 @@ class ClassificationModel(nn.Module):
                     base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
                 else:
                     base_model = vgg16()
-                    base_model.apply(init_weights)
                 base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)   
             elif num_input_channels == 1:
                 base_model = vgg16()
-                base_model.apply(init_weights)
                 base_model.features[0] = nn.Conv2d(1, 64, kernel_size=3, padding=1)
            
             self.features = nn.Sequential(
@@ -726,4 +724,4 @@ if __name__ == "__main__":
 #### column + row -- just column
 #### Adam
 
-############ Cần sửa lớp features cho VGG16
+############ Cần sửa lớp features cho VGG16 - ko có batchnorm -- exploding khi train lại từ đầu
