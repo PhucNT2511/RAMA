@@ -327,32 +327,25 @@ class ClassificationModel(nn.Module):
                     base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
                 else:
                     base_model = vgg16()
-                base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)
-                self.features = nn.Sequential(
-                    base_model.features,
-                    nn.AdaptiveAvgPool2d((1, 1))
-                )
+                base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)   
             elif num_input_channels == 1:
                 base_model = vgg16()
                 base_model.features[0] = nn.Conv2d(1, 64, kernel_size=3, padding=1)
-                self.features = nn.Sequential(
-                    base_model.features,
-                    nn.AdaptiveAvgPool2d((1, 1))
-                )
            
             self.features = nn.Sequential(
-                base_model.features,
-                nn.AdaptiveAvgPool2d((1, 1))
+                *list(base_model.features[:28])
             )
             self.features2 = nn.Sequential(
-                nn.AdaptiveAvgPool2d((1, 1))
+                *list(base_model.features[28:]),
+                base_model.avgpool,
+                *list(base_model.classifier[:-1])
             )
-            self.feature_dim = 512
+            self.feature_dim = base_model.classifier[6].in_features  
 
             if use_rp:
                 self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
             if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row)
+                self.cnn_rp = CNNRandomProjection(512,2,2,self.cnn_lambda_value,resemble=resemble, row=row)
             self.fc = nn.Linear(self.feature_dim, num_classes)
 
         ########### Chưa điều chỉnh gì ViT
