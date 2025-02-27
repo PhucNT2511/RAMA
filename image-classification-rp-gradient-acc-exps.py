@@ -298,7 +298,7 @@ class ClassificationModel(nn.Module):
                 else:
                     base_model = resnet18()
                 base_model.conv1 = nn.Sequential(
-                    nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
+                    nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False), ## No stride 2
                     nn.BatchNorm2d(64),
                     nn.ReLU(inplace=True)
                 )
@@ -309,7 +309,7 @@ class ClassificationModel(nn.Module):
                     nn.BatchNorm2d(64),
                     nn.ReLU(inplace=True)
                 )
-            base_model.maxpool = nn.Identity()   ## Maxpool giữ nguyên --> thử dùng model gốc
+            base_model.maxpool = nn.Identity()   ## Maxpool --> Identity
             self.features = nn.Sequential(
                 base_model.conv1,    
                 base_model.bn1,
@@ -330,7 +330,9 @@ class ClassificationModel(nn.Module):
                 self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
             if use_cnn_rp:
                 self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row)
-            self.fc = nn.Linear(self.feature_dim, num_classes)
+            self.features3 = nn.Sequential(
+                nn.Linear(self.feature_dim, num_classes)
+            )
 
         elif model_type == ModelType.VGG16:
             if num_input_channels == 3:
@@ -358,7 +360,10 @@ class ClassificationModel(nn.Module):
                 self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
             if use_cnn_rp:
                 self.cnn_rp = CNNRandomProjection(512,2,2,self.cnn_lambda_value,resemble=resemble, row=row)
-            self.fc = nn.Linear(self.feature_dim, num_classes)
+            self.features3 = nn.Sequential(
+                nn.BatchNorm1d(self.feature_dim),
+                nn.Linear(self.feature_dim, num_classes)
+            )
 
         ########### Chưa điều chỉnh gì ViT
         elif model_type == ModelType.VIT:
@@ -404,7 +409,7 @@ class ClassificationModel(nn.Module):
 
         if self.use_rp:
             x = self.rp(x) ###
-        return self.fc(x)
+        return self.features3(x)
 
 
 class Trainer:
