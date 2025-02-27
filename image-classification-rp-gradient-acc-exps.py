@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.models import resnet18, vgg16, ResNet18_Weights, VGG16_Weights
 from transformers import ViTModel, ViTConfig, ViTForImageClassification
+import torch.nn.init as init
 import neptune
 import random
 import numpy as np
@@ -257,7 +258,16 @@ class CNNRandomProjection(nn.Module):
         
         return x_new
 
-
+def init_weights(m):
+    """Hàm khởi tạo trọng số cho các layer."""
+    if isinstance(m, nn.Conv2d):
+        init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        if m.bias is not None:
+            init.constant_(m.bias, 0)
+    elif isinstance(m, nn.Linear):
+        init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            init.constant_(m.bias, 0)
 
 class ClassificationModel(nn.Module):
     """Classification model with configurable architecture."""
@@ -285,6 +295,7 @@ class ClassificationModel(nn.Module):
                     base_model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
                 else:
                     base_model = resnet18()
+                    base_model.apply(init_weights)
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False), ## Không stride 2 --> thử dùng model gốc
                     nn.BatchNorm2d(64),
@@ -292,6 +303,7 @@ class ClassificationModel(nn.Module):
                 )
             elif num_input_channels == 1:
                 base_model = resnet18()
+                base_model.apply(init_weights)
                 base_model.conv1 = nn.Sequential(
                     nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False),
                     nn.BatchNorm2d(64),
@@ -326,9 +338,11 @@ class ClassificationModel(nn.Module):
                     base_model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
                 else:
                     base_model = vgg16()
+                    base_model.apply(init_weights)
                 base_model.features[0] = nn.Conv2d(3, 64, kernel_size=3, padding=1)   
             elif num_input_channels == 1:
                 base_model = vgg16()
+                base_model.apply(init_weights)
                 base_model.features[0] = nn.Conv2d(1, 64, kernel_size=3, padding=1)
            
             self.features = nn.Sequential(
