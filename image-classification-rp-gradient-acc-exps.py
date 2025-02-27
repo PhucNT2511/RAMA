@@ -142,7 +142,7 @@ class RanPACLayer(nn.Module):
             self.lambda_param = lambda_value  
             self.clamp = False
         else:
-            self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
+            self.lambda_param = nn.Parameter(torch.tensor(1.0))  ########
             self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
@@ -157,7 +157,7 @@ class RanPACLayer(nn.Module):
             torch.Tensor: Transformed tensor.
         """
         if self.clamp:
-            lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=2.0)
+            lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=3.0)
         else:
             lambda_clamped = self.lambda_param
         x = self.projection(x) * lambda_clamped  * self.sqrt_d
@@ -195,7 +195,7 @@ class CNNRandomProjection(nn.Module):
         #x_new = self.batch_norm(x_new)
         return x_new
 '''
-################# Lỗi trong tính ma trận
+
 class CNNRandomProjection(nn.Module):
     def __init__(self, C, H, W, lambda_value=None, resemble=False, row=False):
         '''
@@ -207,18 +207,17 @@ class CNNRandomProjection(nn.Module):
         self.row = row
         self.C, self.H, self.W = C, H, W
 
-        # Chọn kích thước của ma trận A
-        size = W if row else H  # W nếu nhân theo hàng, H nếu nhân theo cột
+        # Chọn kích thước của ma trận A: W nếu nhân theo hàng, H nếu nhân theo cột
+        size = W if row else H 
 
         # Nếu resemble=True: dùng chung 1 ma trận A, nếu False: mỗi kênh có ma trận A riêng
         if resemble:
-            A = torch.randn(size, size)  # Ma trận A dùng chung
+            A = torch.randn(size, size)  
         else:
-            A = torch.randn(C, size, size)  # Ma trận A riêng cho từng kênh
+            A = torch.randn(C, size, size)
 
         A.requires_grad = False
-        self.register_buffer('A', A)  # Lưu A dưới dạng buffer (không cần tính gradient)
-
+        self.register_buffer('A', A) 
         self.sqrt_d = math.sqrt(size)
 
         if lambda_value is not None:
@@ -338,6 +337,7 @@ class ClassificationModel(nn.Module):
             self.features2 = nn.Sequential(
                 *list(base_model.features[28:]),
                 base_model.avgpool,
+                nn.Flatten(),
                 *list(base_model.classifier[:-1])
             )
             self.feature_dim = base_model.classifier[6].in_features  
