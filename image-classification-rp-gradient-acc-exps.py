@@ -133,7 +133,7 @@ class RanPACLayer(nn.Module):
         lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
         norm_type (str): Normalization type, either "batch" or "layer".
     """
-    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch"):
+    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, non_linearities: str = 'leaky_relu', norm_type: str = "batch"):
         super(RanPACLayer, self).__init__()
         self.projection = nn.Linear(input_dim, output_dim, bias=False)
         self.projection.weight.requires_grad = False
@@ -147,6 +147,7 @@ class RanPACLayer(nn.Module):
             self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
             self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
+        self.non_linearities = non_linearities
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -163,7 +164,14 @@ class RanPACLayer(nn.Module):
         else:
             lambda_clamped = self.lambda_param
         x = self.projection(x) * lambda_clamped  * self.sqrt_d
-        x = nn.functional.leaky_relu(x, negative_slope=0.2)
+        if self.non_linearities == 'leaky_relu':
+            x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
+        elif self.non_linearities == 'sigmoid':
+            x_new = nn.functional.sigmoid(x_new)
+        elif self.non_linearities == 'tanh':
+            x_new = nn.functional.tanh(x_new)
+        elif self.non_linearities == 'exp':
+            x_new = nn.functional.exp(x_new)
         #x = self.norm(x)
         return x
 '''   
@@ -199,7 +207,7 @@ class CNNRandomProjection(nn.Module):
 '''
 
 class CNNRandomProjection(nn.Module):
-    def __init__(self, C, H, W, lambda_value=None, resemble=False, row=False):
+    def __init__(self, C, H, W, lambda_value=None, resemble=False, row=False, non_linearities = 'leaky_relu'):
         '''
         row: use row vectors, else use column vectors
         resemble: use the same matrix U for all channels
@@ -230,6 +238,7 @@ class CNNRandomProjection(nn.Module):
             self.clamp = True
 
         self.batch_norm = nn.BatchNorm2d(C)
+        self.non_linearities = non_linearities
 
     def forward(self, x):
         """
@@ -254,7 +263,15 @@ class CNNRandomProjection(nn.Module):
 
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * lambda_clamped * self.sqrt_d
-        x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
+        if self.non_linearities == 'leaky_relu':
+            x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
+        elif self.non_linearities == 'sigmoid':
+            x_new = nn.functional.sigmoid(x_new)
+        elif self.non_linearities == 'tanh':
+            x_new = nn.functional.tanh(x_new)
+        elif self.non_linearities == 'exp':
+            x_new = nn.functional.exp(x_new)
+
         #x_new = self.batch_norm(x_new)
         
         return x_new
@@ -277,7 +294,8 @@ class ClassificationModel(nn.Module):
     def __init__(self, model_type: ModelType, num_classes: int, use_rp: bool = False,
                  lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
                  cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3,
-                 resemble: bool = False, row: bool = False, pretrained: bool = False):
+                 resemble: bool = False, row: bool = False, pretrained: bool = False,
+                 non_linearities: str = 'leaky_relu'):
         """
         Args:
             model_type: Type of base model architecture
@@ -322,7 +340,7 @@ class ClassificationModel(nn.Module):
             )
 
             if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row)
+                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row, non_linearities = non_linearities)
             
             self.features2 = nn.Sequential(
                 base_model.layer4,
@@ -331,7 +349,7 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
 
             if use_rp:
-                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value) 
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value, non_linearities) 
             
             self.features3 = nn.Sequential(
                 nn.Linear(self.feature_dim, num_classes)
@@ -625,6 +643,7 @@ def main():
     parser.add_argument("--resemble", type=bool, default=False, help="Same U matrix for RAMA in CNN layer")
     parser.add_argument("--row", type=bool, default=False, help="Vectorization followed columns or not")
     parser.add_argument("--pretrained", type=bool, default=False, help="Use pre-trained weights")
+    parser.add_argument("--non_linearities", type=str, default='leaky_relu', help="Choose non-linear function")
     # Training hyperparameters
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size per GPU")
     parser.add_argument("--num_classes", type=int, default=100, help="Number of classes")
@@ -663,6 +682,7 @@ def main():
         "virtual_batch_size": args.batch_size * args.gradient_accumulation_steps,
         "learning_rate": args.initial_lr,
         "epochs": args.epochs,
+        "non_linearities": args.non_linearities,
     }
     if args.optim == 'SGD':
         config.update({     "momentum": args.momentum,
@@ -702,6 +722,7 @@ def main():
         resemble = args.resemble,
         row = args.row,
         pretrained = args.pretrained,
+        non_linearities = args.non_linearities,
     )
 
     print(model)
