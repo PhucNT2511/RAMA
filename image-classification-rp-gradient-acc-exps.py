@@ -137,14 +137,14 @@ class RanPACLayer(nn.Module):
         super(RanPACLayer, self).__init__()
         self.projection = nn.Linear(input_dim, output_dim, bias=False)
         self.projection.weight.requires_grad = False
-        nn.init.normal_(self.projection.weight, mean=0, std=1.0)
+        nn.init.normal_(self.projection.weight, mean=0, std=1.0)  ## randn
         if lambda_value:
             self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = lambda_value  
             self.clamp = False
         else:
-            self.sqrt_d = 1
-            self.lambda_param = nn.Parameter(torch.tensor(1.0))  ########
+            self.sqrt_d = math.sqrt(input_dim)
+            self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
             self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
@@ -310,6 +310,7 @@ class ClassificationModel(nn.Module):
                     nn.ReLU(inplace=True)
                 )
             base_model.maxpool = nn.Identity()   ## Maxpool --> Identity
+            
             self.features = nn.Sequential(
                 base_model.conv1,    
                 base_model.bn1,
@@ -319,6 +320,9 @@ class ClassificationModel(nn.Module):
                 base_model.layer2,
                 base_model.layer3,           
             )
+
+            if use_cnn_rp:
+                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row)
             
             self.features2 = nn.Sequential(
                 base_model.layer4,
@@ -327,9 +331,8 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
 
             if use_rp:
-                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
-            if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row)
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value) 
+            
             self.features3 = nn.Sequential(
                 nn.Linear(self.feature_dim, num_classes)
             )
