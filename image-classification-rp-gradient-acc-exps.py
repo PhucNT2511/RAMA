@@ -165,15 +165,15 @@ class RanPACLayer(nn.Module):
             lambda_clamped = self.lambda_param
         x = self.projection(x) * lambda_clamped  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
-            x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
+            x_new = nn.functional.leaky_relu(x, negative_slope=0.2)
         elif self.non_linearities == 'sigmoid':
-            x_new = nn.functional.sigmoid(x_new)
+            x_new = nn.functional.sigmoid(x)
         elif self.non_linearities == 'tanh':
-            x_new = nn.functional.tanh(x_new)
+            x_new = nn.functional.tanh(x)
         elif self.non_linearities == 'exp':
-            x_new = nn.functional.exp(x_new)
+            x_new = nn.functional.exp(x)
         #x = self.norm(x)
-        return x
+        return x_new
 '''   
 class CNNRandomProjection(nn.Module):
     def __init__(self, C, H, W, lambda_value = None):
