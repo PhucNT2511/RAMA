@@ -207,18 +207,23 @@ class CNNRandomProjection(nn.Module):
 '''
 
 class CNNRandomProjection(nn.Module):
-    def __init__(self, C, H, W, lambda_value=None, resemble=False, row=False, non_linearities = 'leaky_relu'):
+    def __init__(self, C, H, W, lambda_value=None, resemble=False, vector_based = 'column', non_linearities = 'leaky_relu'):
         '''
-        row: use row vectors, else use column vectors
+        vector_based: decomposition vectors, i.e use column vectors
         resemble: use the same matrix U for all channels
         '''
         super(CNNRandomProjection, self).__init__()
         self.resemble = resemble
-        self.row = row
+        self.base = vector_based
         self.C, self.H, self.W = C, H, W
 
-        # Chọn kích thước của ma trận A: W nếu nhân theo hàng, H nếu nhân theo cột
-        size = W if row else H 
+        # Chọn kích thước của ma trận A: W nếu nhân theo hàng, H nếu nhân theo cột, C nếu theo channel
+        if self.base == 'row':
+            size = W 
+        elif  self.base == 'column':
+            size = H
+        elif self.base == 'channel':
+            size = C
 
         # Nếu resemble=True: dùng chung 1 ma trận A, nếu False: mỗi kênh có ma trận A riêng
         if resemble:
@@ -245,18 +250,24 @@ class CNNRandomProjection(nn.Module):
         - Nếu row=True: Áp dụng A trên từng hàng của ảnh (Wx1)
         - Nếu row=False: Áp dụng A trên từng cột của ảnh (Hx1)
         """
-        if not self.row:
+        if self.base == "column":
             # Nhân theo cột (N,C,:,W)
             if self.resemble:
                 x_new = torch.einsum('ih,nchw->nciw', self.A, x)
             else:
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x)
-        else:
+        elif self.base == "row":
             # Nhân theo hàng (N,C,H,:) - permute
             if self.resemble:
                 x_new = torch.einsum('ih,nchw->nciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
             else:
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+        elif self.base == "channel":
+            # Nhân theo channel (N,C,H,:) - permute
+            if self.resemble:
+                x_new = torch.einsum('ih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
+            else:
+                x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
 
         # Điều chỉnh giá trị lambda
         lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=3.0) if self.clamp else self.lambda_param
@@ -294,7 +305,7 @@ class ClassificationModel(nn.Module):
     def __init__(self, model_type: ModelType, num_classes: int, use_rp: bool = False,
                  lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
                  cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3,
-                 resemble: bool = False, row: bool = False, pretrained: bool = False,
+                 resemble: bool = False, vector_based: str = 'column', pretrained: bool = False,
                  non_linearities: str = 'leaky_relu'):
         """
         Args:
@@ -340,7 +351,7 @@ class ClassificationModel(nn.Module):
             )
 
             if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, row=row, non_linearities = non_linearities)
+                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, vector_based= vector_based, non_linearities = non_linearities)
             
             self.features2 = nn.Sequential(
                 base_model.layer4,
@@ -380,7 +391,7 @@ class ClassificationModel(nn.Module):
             if use_rp:
                 self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value)
             if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(512,2,2,self.cnn_lambda_value,resemble=resemble, row=row)
+                self.cnn_rp = CNNRandomProjection(512,2,2,self.cnn_lambda_value,resemble=resemble, vector_based=vector_based)
             self.features3 = nn.Sequential(
                 nn.BatchNorm1d(self.feature_dim),
                 nn.Linear(self.feature_dim, num_classes)
@@ -607,7 +618,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         exp_name += f"_RP{args.lambda_value}"
     if args.use_cnn_rp:
         exp_name += f"_CNN_RP{args.cnn_lambda_value}"
-    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_row{args.row}_pretrained{args.pretrained}_bs{args.batch_size}_g{args.gradient_accumulation_steps}_{timestamp}"
+    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_vector_based{args.vector_based}_pretrained{args.pretrained}_bs{args.batch_size}_g{args.gradient_accumulation_steps}_{timestamp}"
     return exp_name
 
 
@@ -641,7 +652,7 @@ def main():
     parser.add_argument("--use_cnn_rp", type=bool, default=False, help="Use randomized projection for CNN layer")
     parser.add_argument("--cnn_lambda_value", type=float, default=None, help="Lambda value for RP in CNN layer")
     parser.add_argument("--resemble", type=bool, default=False, help="Same U matrix for RAMA in CNN layer")
-    parser.add_argument("--row", type=bool, default=False, help="Vectorization followed columns or not")
+    parser.add_argument("--vector_based", type=str, default='column', help="Vectorization followed columns or not")
     parser.add_argument("--pretrained", type=bool, default=False, help="Use pre-trained weights")
     parser.add_argument("--non_linearities", type=str, default='leaky_relu', help="Choose non-linear function")
     # Training hyperparameters
@@ -720,7 +731,7 @@ def main():
         cnn_lambda_value = args.cnn_lambda_value,
         num_input_channels= 1 if args.dataset.value == "OmniBenchmark" else 3,
         resemble = args.resemble,
-        row = args.row,
+        vector_based = args.vector_based,
         pretrained = args.pretrained,
         non_linearities = args.non_linearities,
     )
