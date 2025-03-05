@@ -354,7 +354,7 @@ class ClassificationModel(nn.Module):
             )
 
             if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(256,8,8,self.cnn_lambda_value,resemble=resemble, vector_based= vector_based, non_linearities = non_linearities)
+                self.cnn_rp = CNNRandomProjection(256,8,8,lambda_value=self.cnn_lambda_value,resemble=resemble, vector_based= vector_based, non_linearities = non_linearities)
             
             self.features2 = nn.Sequential(
                 base_model.layer4,
@@ -363,7 +363,7 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
 
             if use_rp:
-                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, self.lambda_value, non_linearities) 
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, lambda_value=self.lambda_value, non_linearities) 
             
             self.features3 = nn.Sequential(
                 nn.Linear(self.feature_dim, num_classes)
