@@ -229,7 +229,7 @@ class CNNRandomProjection(nn.Module):
         if resemble:
             A = torch.randn(size, size)  
         else:
-            A = torch.randn(C, size, size)
+            A = torch.randn(H, size, size)
 
         A.requires_grad = False
         self.register_buffer('A', A) 
