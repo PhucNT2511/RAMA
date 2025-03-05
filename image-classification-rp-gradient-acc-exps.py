@@ -220,16 +220,19 @@ class CNNRandomProjection(nn.Module):
         # Chọn kích thước của ma trận A: W nếu nhân theo hàng, H nếu nhân theo cột, C nếu theo channel
         if self.base == 'row':
             size = W 
+            K = C
         elif  self.base == 'column':
             size = H
+            K = C
         elif self.base == 'channel':
             size = C
+            K = H
 
         # Nếu resemble=True: dùng chung 1 ma trận A, nếu False: mỗi kênh có ma trận A riêng
         if resemble:
             A = torch.randn(size, size)  
         else:
-            A = torch.randn(H, size, size)
+            A = torch.randn(K, size, size)
 
         A.requires_grad = False
         self.register_buffer('A', A) 
