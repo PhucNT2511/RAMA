@@ -235,7 +235,6 @@ class CNNRandomProjection(nn.Module):
             A = torch.randn(K, size, size)
 
         A.requires_grad = False
-        self.register_buffer('A', A) 
         self.sqrt_d = math.sqrt(size)
 
         if lambda_value is not None:
@@ -250,8 +249,6 @@ class CNNRandomProjection(nn.Module):
 
     def forward(self, x):
         """
-        - Nếu row=True: Áp dụng A trên từng hàng của ảnh (Wx1)
-        - Nếu row=False: Áp dụng A trên từng cột của ảnh (Hx1)
         """
         if self.base == "column":
             # Nhân theo cột (N,C,:,W)
@@ -273,7 +270,10 @@ class CNNRandomProjection(nn.Module):
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
 
         # Điều chỉnh giá trị lambda
-        lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=3.0) if self.clamp else self.lambda_param
+        if self.clamp:
+            lambda_clamped = torch.clamp(self.lambda_param, min=0.01, max=3.0)
+        else:
+            lambda_clamped = self.lambda_param
 
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * lambda_clamped * self.sqrt_d
@@ -363,7 +363,7 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
 
             if use_rp:
-                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, lambda_value=self.lambda_value, non_linearities) 
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, lambda_value=self.lambda_value, non_linearities = non_linearities)
             
             self.features3 = nn.Sequential(
                 nn.Linear(self.feature_dim, num_classes)
