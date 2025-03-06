@@ -251,6 +251,7 @@ class CNNRandomProjection(nn.Module):
     def forward(self, x):
         """
         """
+        self.A = self.A.to(x.device)
         if self.base == "column":
             # Nhân theo cột (N,C,:,W)
             if self.resemble:
