@@ -236,6 +236,7 @@ class CNNRandomProjection(nn.Module):
 
         A.requires_grad = False
         self.sqrt_d = math.sqrt(size)
+        self.A = A
 
         if lambda_value is not None:
             self.lambda_param = lambda_value
