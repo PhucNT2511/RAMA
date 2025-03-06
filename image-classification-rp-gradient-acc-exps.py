@@ -280,7 +280,7 @@ class CNNRandomProjection(nn.Module):
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * lambda_clamped * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
-            x_new = nn.functional.leaky_relu(x_new, negative_slope=0.2)
+            x_new = nn.functional.leaky_relu(x_new, negative_slope=0.01)
         elif self.non_linearities == 'sigmoid':
             x_new = nn.functional.sigmoid(x_new)
         elif self.non_linearities == 'tanh':
@@ -623,7 +623,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         exp_name += f"_RP{args.lambda_value}"
     if args.use_cnn_rp:
         exp_name += f"_CNN_RP{args.cnn_lambda_value}"
-    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_vector_based{args.vector_based}_pretrained{args.pretrained}_bs{args.batch_size}_g{args.gradient_accumulation_steps}_{timestamp}"
+    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_vector_based{args.vector_based}_pretrained{args.pretrained}_bs{args.batch_size}_non_linearities{args.non_linearities}_g{args.gradient_accumulation_steps}_{timestamp}"
     return exp_name
 
 
