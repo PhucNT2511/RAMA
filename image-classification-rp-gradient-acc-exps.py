@@ -545,6 +545,12 @@ class Trainer:
             correct += outputs.max(1)[1].eq(labels).sum().item()
             total += labels.size(0)
 
+            if (i==len(self.train_loader)-1) and (self.neptune_run):
+                if self.args.use_rp == True and self.args.lambda_value == None:
+                    self.neptune_run["Lambda/Linear"].append(self.model.rp.lambda_param)
+                if self.args.use_cnn_rp == True and self.args.cnn_lambda_value == None:
+                    self.neptune_run["Lambda/CNN"].append(self.model.cnn_rp.lambda_param)
+
             if (i + 1) % self.gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
