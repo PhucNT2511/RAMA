@@ -160,11 +160,16 @@ class RanPACLayer(nn.Module):
             torch.Tensor: Transformed tensor.
         """
         # Điều chỉnh giá trị lambda
+        '''
+        #Keep computational graph
         lambda_clamp = self.lambda_param.clone()
         if self.clamp:
             lambda_clamp = torch.clamp(lambda_clamp, min=0.01, max=1.0)
+        '''
+        # Break graph
+        self.lambda_param.data.clamp_(0.01, 1.0)
 
-        x = self.projection(x) * lambda_clamp  * self.sqrt_d
+        x = self.projection(x) * self.lambda_param  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
             x_new = nn.functional.leaky_relu(x, negative_slope=0.2)
         elif self.non_linearities == 'sigmoid':
@@ -273,12 +278,16 @@ class CNNRandomProjection(nn.Module):
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
 
         # Điều chỉnh giá trị lambda
+        '''
         lambda_clamp = self.lambda_param.clone()
         if self.clamp:
             lambda_clamp = torch.clamp(lambda_clamp, min=0.01, max=0.5)
+        '''
+         # Break graph
+        self.lambda_param.data.clamp_(0.01, 0.5)
 
         # Áp dụng scale, kích hoạt và batch normalization
-        x_new = x_new * lambda_clamp * self.sqrt_d
+        x_new = x_new * self.lambda_param * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
             x_new = nn.functional.leaky_relu(x_new, negative_slope=0.1)
         elif self.non_linearities == 'sigmoid':
