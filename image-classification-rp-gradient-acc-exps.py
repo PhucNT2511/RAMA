@@ -145,7 +145,7 @@ class RanPACLayer(nn.Module):
         else:
             self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
-            self.clamp = True
+            self.clamp = False
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
         self.non_linearities = non_linearities
 
@@ -159,10 +159,12 @@ class RanPACLayer(nn.Module):
         Returns:
             torch.Tensor: Transformed tensor.
         """
+        # Điều chỉnh giá trị lambda
+        lambda_clamp = self.lambda_param.clone()
         if self.clamp:
-            self.lambda_param = torch.clamp(self.lambda_param, min=0.01, max=1.0)
+            lambda_clamp = torch.clamp(lambda_clamp, min=0.01, max=1.0)
 
-        x = self.projection(x) * self.lambda_param  * self.sqrt_d
+        x = self.projection(x) * lambda_clamp  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
             x_new = nn.functional.leaky_relu(x, negative_slope=0.2)
         elif self.non_linearities == 'sigmoid':
@@ -271,11 +273,12 @@ class CNNRandomProjection(nn.Module):
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
 
         # Điều chỉnh giá trị lambda
+        lambda_clamp = self.lambda_param.clone()
         if self.clamp:
-            self.lambda_param = torch.clamp(self.lambda_param, min=0.01, max=0.5)
+            lambda_clamp = torch.clamp(lambda_clamp, min=0.01, max=0.5)
 
         # Áp dụng scale, kích hoạt và batch normalization
-        x_new = x_new * self.lambda_param * self.sqrt_d
+        x_new = x_new * lambda_clamp * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
             x_new = nn.functional.leaky_relu(x_new, negative_slope=0.1)
         elif self.non_linearities == 'sigmoid':
