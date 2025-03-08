@@ -572,10 +572,6 @@ class Trainer:
         if self.neptune_run:
             self.neptune_run["Train/Loss"].append(epoch_loss)
             self.neptune_run["Train/Accuracy"].append(epoch_acc)
-            if self.args.use_rp == True and self.args.lambda_value == None:
-                self.neptune_run["Lambda/Linear"].append(self.model.rp.lambda_param)
-            if self.args.use_cnn_rp == True and self.args.cnn_lambda_value == None:
-                self.neptune_run["Lambda/CNN"].append(self.model.cnn_rp.lambda_param)
         return epoch_loss, epoch_acc
 
     def evaluate(self, writer: SummaryWriter, epoch: int) -> Tuple[float, float]:
