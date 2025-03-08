@@ -160,7 +160,7 @@ class RanPACLayer(nn.Module):
             torch.Tensor: Transformed tensor.
         """
         if self.clamp:
-            self.lambda_param = torch.clamp(self.lambda_param, min=0.01, max=0.5)
+            self.lambda_param = torch.clamp(self.lambda_param, min=0.01, max=1.0)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
