@@ -145,7 +145,7 @@ class RanPACLayer(nn.Module):
         else:
             self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
-            self.clamp = True
+            self.clamp = False
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
         self.non_linearities = non_linearities
 
@@ -243,7 +243,7 @@ class CNNRandomProjection(nn.Module):
             self.clamp = False
         else:
             self.lambda_param = nn.Parameter(torch.tensor(0.2))
-            self.clamp = True
+            self.clamp = False
 
         self.batch_norm = nn.BatchNorm2d(C)
         self.non_linearities = non_linearities
