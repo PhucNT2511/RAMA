@@ -177,7 +177,7 @@ class RanPACLayer(nn.Module):
         elif self.non_linearities == 'tanh':
             x_new = nn.functional.tanh(x)
         elif self.non_linearities == 'exp':
-            x_new = nn.functional.exp(x)
+            x_new = torch.exp(x)
         #x = self.norm(x)
         return x_new
 '''   
