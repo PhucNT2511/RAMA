@@ -295,7 +295,7 @@ class CNNRandomProjection(nn.Module):
         elif self.non_linearities == 'tanh':
             x_new = nn.functional.tanh(x_new)
         elif self.non_linearities == 'exp':
-            x_new = nn.functional.exp(x_new)
+            x_new = torch.exp(x_new)
 
         #x_new = self.batch_norm(x_new)
         
