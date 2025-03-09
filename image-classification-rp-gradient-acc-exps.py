@@ -133,7 +133,7 @@ class RanPACLayer(nn.Module):
         lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
         norm_type (str): Normalization type, either "batch" or "layer".
     """
-    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, non_linearities: str = 'leaky_relu', norm_type: str = "batch"):
+    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, non_linearities: str = 'leaky_relu', norm_type: str = "batch", negative_slope_leaky_relu: float = 0.2):
         super(RanPACLayer, self).__init__()
         self.projection = nn.Linear(input_dim, output_dim, bias=False)
         self.projection.weight.requires_grad = False
@@ -148,6 +148,8 @@ class RanPACLayer(nn.Module):
             self.clamp = False
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
         self.non_linearities = non_linearities
+
+        self.negative_slope_leaky_relu = negative_slope_leaky_relu 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -171,7 +173,7 @@ class RanPACLayer(nn.Module):
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
-            x_new = nn.functional.leaky_relu(x, negative_slope=0.2)
+            x_new = nn.functional.leaky_relu(x, negative_slope=self.negative_slope_leaky_relu)
         elif self.non_linearities == 'sigmoid':
             x_new = nn.functional.sigmoid(x)
         elif self.non_linearities == 'tanh':
@@ -213,7 +215,7 @@ class CNNRandomProjection(nn.Module):
 '''
 
 class CNNRandomProjection(nn.Module):
-    def __init__(self, C, H, W, lambda_value=None, resemble=False, vector_based = 'column', non_linearities = 'leaky_relu'):
+    def __init__(self, C, H, W, lambda_value=None, resemble=False, vector_based = 'column', non_linearities = 'leaky_relu', negative_slope_leaky_relu: float = 0.2):
         '''
         vector_based: decomposition vectors, i.e use column vectors
         resemble: use the same matrix U for all channels
@@ -253,6 +255,7 @@ class CNNRandomProjection(nn.Module):
 
         self.batch_norm = nn.BatchNorm2d(C)
         self.non_linearities = non_linearities
+        self.negative_slope_leaky_relu = negative_slope_leaky_relu 
 
     def forward(self, x):
         """
@@ -289,7 +292,7 @@ class CNNRandomProjection(nn.Module):
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * self.lambda_param * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
-            x_new = nn.functional.leaky_relu(x_new, negative_slope=0.1)
+            x_new = nn.functional.leaky_relu(x, negative_slope=self.negative_slope_leaky_relu)
         elif self.non_linearities == 'sigmoid':
             x_new = nn.functional.sigmoid(x_new)
         elif self.non_linearities == 'tanh':
@@ -320,7 +323,7 @@ class ClassificationModel(nn.Module):
                  lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
                  cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3,
                  resemble: bool = False, vector_based: str = 'column', pretrained: bool = False,
-                 non_linearities: str = 'leaky_relu'):
+                 non_linearities: str = 'leaky_relu', negative_slope_leaky_relu: float = 0.2):
         """
         Args:
             model_type: Type of base model architecture
@@ -365,7 +368,7 @@ class ClassificationModel(nn.Module):
             )
 
             if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(256,8,8,lambda_value=self.cnn_lambda_value,resemble=resemble, vector_based= vector_based, non_linearities = non_linearities)
+                self.cnn_rp = CNNRandomProjection(256,8,8,lambda_value=self.cnn_lambda_value,resemble=resemble, vector_based= vector_based, non_linearities = non_linearities, negative_slope_leaky_relu= negative_slope_leaky_relu)
             
             self.features2 = nn.Sequential(
                 base_model.layer4,
@@ -374,7 +377,7 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
 
             if use_rp:
-                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, lambda_value=self.lambda_value, non_linearities = non_linearities)
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, lambda_value=self.lambda_value, non_linearities = non_linearities, negative_slope_leaky_relu = negative_slope_leaky_relu)
             
             self.features3 = nn.Sequential(
                 nn.Linear(self.feature_dim, num_classes)
@@ -671,6 +674,7 @@ def main():
     parser.add_argument("--vector_based", type=str, default='column', help="Vectorization followed columns or not")
     parser.add_argument("--pretrained", type=bool, default=False, help="Use pre-trained weights")
     parser.add_argument("--non_linearities", type=str, default='leaky_relu', help="Choose non-linear function")
+    parser.add_argument("--negative_slope_leaky_relu", type=float, default=0.2, help="Choose value for negative_slope_leaky_relu")
     # Training hyperparameters
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size per GPU")
     parser.add_argument("--num_classes", type=int, default=100, help="Number of classes")
@@ -750,6 +754,7 @@ def main():
         vector_based = args.vector_based,
         pretrained = args.pretrained,
         non_linearities = args.non_linearities,
+        negative_slope_leaky_relu = args.negative_slope_leaky_relu,
     )
 
     print(model)
