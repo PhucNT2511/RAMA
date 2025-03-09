@@ -637,7 +637,9 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         exp_name += f"_RP{args.lambda_value}"
     if args.use_cnn_rp:
         exp_name += f"_CNN_RP{args.cnn_lambda_value}"
-    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_vector_based{args.vector_based}_pretrained{args.pretrained}_bs{args.batch_size}_non_linearities{args.non_linearities}_g{args.gradient_accumulation_steps}_{timestamp}"
+    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_vector_based{args.vector_based}_pretrained{args.pretrained}_bs{args.batch_size}_non_linearities{args.non_linearities}_g{args.gradient_accumulation_steps}"
+    if args.non_linearities == "leaky_relu":
+        exp_name += f"_negative_slope_leaky_relu_{args.negative_slope_leaky_relu}"
     return exp_name
 
 
