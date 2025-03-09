@@ -294,7 +294,7 @@ class CNNRandomProjection(nn.Module):
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * self.lambda_param * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
-            x_new = nn.functional.leaky_relu(x, negative_slope=self.negative_slope_leaky_relu)
+            x_new = nn.functional.leaky_relu(x_new, negative_slope=self.negative_slope_leaky_relu)
         elif self.non_linearities == 'sigmoid':
             x_new = nn.functional.sigmoid(x_new)
         elif self.non_linearities == 'tanh':
