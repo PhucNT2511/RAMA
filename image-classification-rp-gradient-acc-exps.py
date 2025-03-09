@@ -169,7 +169,8 @@ class RanPACLayer(nn.Module):
             lambda_clamp = torch.clamp(lambda_clamp, min=0.01, max=1.0)
         '''
         # Break graph
-        self.lambda_param.data.clamp_(0.05, 0.6)
+        if self.clamp:
+            self.lambda_param.data.clamp_(0.05, 0.6)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
@@ -287,7 +288,8 @@ class CNNRandomProjection(nn.Module):
             lambda_clamp = torch.clamp(lambda_clamp, min=0.01, max=0.5)
         '''
          # Break graph
-        self.lambda_param.data.clamp_(0.05, 0.5)
+        if self.clamp:
+            self.lambda_param.data.clamp_(0.05, 0.5)
 
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * self.lambda_param * self.sqrt_d
