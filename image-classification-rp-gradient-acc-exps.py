@@ -257,7 +257,7 @@ class CNNRandomProjection(nn.Module):
             self.clamp = False
         else:
             self.lambda_param = nn.Parameter(torch.tensor(0.2))
-            self.clamp = True
+            self.clamp = False
 
         self.batch_norm = nn.BatchNorm2d(C)
         self.non_linearities = non_linearities
