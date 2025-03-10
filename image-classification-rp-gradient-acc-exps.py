@@ -216,10 +216,10 @@ class CNNRandomProjection(nn.Module):
 '''
 
 class CNNRandomProjection(nn.Module):
-    def __init__(self, C, H, W, lambda_value=None, resemble=False, vector_based = 'column', non_linearities = 'leaky_relu', negative_slope_leaky_relu: float = 0.2):
+    def __init__(self, C, H, W, lambda_value=None, resemble="partial", vector_based = 'column', non_linearities = 'leaky_relu', negative_slope_leaky_relu: float = 0.2):
         '''
         vector_based: decomposition vectors, i.e use column vectors
-        resemble: use the same matrix U for all channels
+        resemble: use the same matrix U for all channels: full, partial, separate
         '''
         super(CNNRandomProjection, self).__init__()
         self.resemble = resemble
@@ -229,19 +229,24 @@ class CNNRandomProjection(nn.Module):
         # Chọn kích thước của ma trận A: W nếu nhân theo hàng, H nếu nhân theo cột, C nếu theo channel
         if self.base == 'row':
             size = W 
-            K = C
+            K1 = C
+            K2 = H
         elif  self.base == 'column':
             size = H
-            K = C
+            K1 = C
+            K2 = W
         elif self.base == 'channel':
             size = C
-            K = H
+            K1 = H
+            K2 = W
 
-        # Nếu resemble=True: dùng chung 1 ma trận A, nếu False: mỗi kênh có ma trận A riêng
-        if resemble:
+        # Nếu resemble=full: dùng chung 1 ma trận A, nếu separate: mỗi kênh có ma trận A riêng, partial thì chung theo một chiều
+        if resemble == "full":
             A = torch.randn(size, size)  
-        else:
-            A = torch.randn(K, size, size)
+        elif resemble == "partial":
+            A = torch.randn(K1, size, size)
+        elif resemble == "separate":
+            A = torch.randn(K1, K2, size, size)
 
         A.requires_grad = False
         self.sqrt_d = math.sqrt(size)
@@ -264,22 +269,28 @@ class CNNRandomProjection(nn.Module):
         self.A = self.A.to(x.device)
         if self.base == "column":
             # Nhân theo cột (N,C,:,W)
-            if self.resemble:
+            if self.resemble == "full":
                 x_new = torch.einsum('ih,nchw->nciw', self.A, x)
-            else:
+            elif self.resemble == "partial":
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x)
+            elif self.resemble == "separate":
+                x_new = torch.einsum('cwih,nchw->nciw', self.A, x)
         elif self.base == "row":
             # Nhân theo hàng (N,C,H,:) - permute
-            if self.resemble:
+            if self.resemble == "full":
                 x_new = torch.einsum('ih,nchw->nciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
-            else:
+            elif self.resemble == "partial":
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+            elif self.resemble == "separate":
+                x_new = torch.einsum('cwih,nchw->nciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
         elif self.base == "channel":
             # Nhân theo channel (N,C,H,:) - permute
-            if self.resemble:
+            if self.resemble == "full":
                 x_new = torch.einsum('ih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
-            else:
+            elif self.resemble == "partial":
                 x_new = torch.einsum('cih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
+            elif self.resemble == "separate":
+                x_new = torch.einsum('cwih,nchw->nciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
 
         # Điều chỉnh giá trị lambda
         '''
@@ -324,7 +335,7 @@ class ClassificationModel(nn.Module):
     def __init__(self, model_type: ModelType, num_classes: int, use_rp: bool = False,
                  lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
                  cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3,
-                 resemble: bool = False, vector_based: str = 'column', pretrained: bool = False,
+                 resemble: str = "partial", vector_based: str = 'column', pretrained: bool = False,
                  non_linearities: str = 'leaky_relu', negative_slope_leaky_relu: float = 0.2):
         """
         Args:
@@ -674,7 +685,7 @@ def main():
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
     parser.add_argument("--use_cnn_rp", type=bool, default=False, help="Use randomized projection for CNN layer")
     parser.add_argument("--cnn_lambda_value", type=float, default=None, help="Lambda value for RP in CNN layer")
-    parser.add_argument("--resemble", type=bool, default=False, help="Same U matrix for RAMA in CNN layer")
+    parser.add_argument("--resemble", type=str, default="partial", help="Same U matrix for RAMA in CNN layer")
     parser.add_argument("--vector_based", type=str, default='column', help="Vectorization followed columns or not")
     parser.add_argument("--pretrained", type=bool, default=False, help="Use pre-trained weights")
     parser.add_argument("--non_linearities", type=str, default='leaky_relu', help="Choose non-linear function")
