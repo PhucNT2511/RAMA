@@ -144,7 +144,7 @@ class RanPACLayer(nn.Module):
             self.clamp = False
         else:
             self.sqrt_d = math.sqrt(input_dim)
-            self.lambda_param = nn.Parameter(torch.tensor(0.05))  ########
+            self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
             self.clamp = False
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
         self.non_linearities = non_linearities
@@ -300,7 +300,7 @@ class CNNRandomProjection(nn.Module):
         '''
          # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.2, 0.4)
+            self.lambda_param.data.clamp_(0.2, 0.5)
 
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * self.lambda_param * self.sqrt_d
@@ -316,6 +316,7 @@ class CNNRandomProjection(nn.Module):
         #x_new = self.batch_norm(x_new)
         
         return x_new
+######################## channel_based vectors --> learnable lambda (0.01 -- 0.1) khởi tạo 0.05
 
 ### Torch sẽ tự khởi tạo, ko cần thiết
 def init_weights(m):
