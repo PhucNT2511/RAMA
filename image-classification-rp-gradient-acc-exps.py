@@ -300,7 +300,7 @@ class CNNRandomProjection(nn.Module):
         '''
          # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.01, 0.3)
+            self.lambda_param.data.clamp_(0.01, 0.1)
 
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * self.lambda_param * self.sqrt_d
