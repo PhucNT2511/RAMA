@@ -256,7 +256,7 @@ class CNNRandomProjection(nn.Module):
             self.lambda_param = lambda_value
             self.clamp = False
         else:
-            self.lambda_param = nn.Parameter(torch.tensor(0.2))
+            self.lambda_param = nn.Parameter(torch.tensor(0.3))
             self.clamp = True
 
         self.batch_norm = nn.BatchNorm2d(C)
@@ -300,7 +300,7 @@ class CNNRandomProjection(nn.Module):
         '''
          # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.1, 0.4)
+            self.lambda_param.data.clamp_(0.2, 0.4)
 
         # Áp dụng scale, kích hoạt và batch normalization
         x_new = x_new * self.lambda_param * self.sqrt_d
