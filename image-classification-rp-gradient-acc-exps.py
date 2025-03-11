@@ -170,7 +170,7 @@ class RanPACLayer(nn.Module):
         '''
         # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.01, 0.1)
+            self.lambda_param.data.clamp_(0.005, 0.1)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
