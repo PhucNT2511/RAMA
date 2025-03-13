@@ -144,7 +144,7 @@ class RanPACLayer(nn.Module):
             self.clamp = False
         else:
             self.sqrt_d = math.sqrt(input_dim)
-            self.lambda_param = nn.Parameter(torch.tensor(0.2))  ########
+            self.lambda_param = nn.Parameter(torch.tensor(0.001))  ########
             self.clamp = False
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
         self.non_linearities = non_linearities
@@ -170,7 +170,7 @@ class RanPACLayer(nn.Module):
         '''
         # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.005, 0.1)
+            self.lambda_param.data.clamp_(0.0001, 0.005)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
