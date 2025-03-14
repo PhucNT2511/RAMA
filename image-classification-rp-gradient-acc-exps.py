@@ -170,7 +170,7 @@ class RanPACLayer(nn.Module):
         '''
         # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.0005, 0.002)
+            self.lambda_param.data.clamp_(-0.02, 0.02)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         if self.non_linearities == 'leaky_relu':
@@ -183,6 +183,10 @@ class RanPACLayer(nn.Module):
             x_new = torch.exp(x)
         #x = self.norm(x)
         return x_new
+############### Riêng phần này nếu để học đang gặp vấn đề rất lớn. Lý do ở đây là ta muốn nó hội tụ dần về tầm 0.001;
+#  nhưng grad của nó lớn hơn nhiều so với giá trị lambda, do được scale sqrt(dim) nên dù có nhân với lr thì cx ko đủ đô.
+
+
 '''   
 class CNNRandomProjection(nn.Module):
     def __init__(self, C, H, W, lambda_value = None):
