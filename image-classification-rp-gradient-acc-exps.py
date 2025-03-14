@@ -143,7 +143,7 @@ class RanPACLayer(nn.Module):
             self.lambda_param = lambda_value  
             self.clamp = False
         else:
-            self.sqrt_d = math.sqrt(input_dim)
+            self.sqrt_d = math.sqrt(1)
             self.lambda_param = nn.Parameter(torch.tensor(0.02))  ########
             self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
