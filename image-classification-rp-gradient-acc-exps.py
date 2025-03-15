@@ -182,7 +182,7 @@ class RanPACLayer(nn.Module):
         elif self.non_linearities == 'exp':
             x_new = torch.exp(x)
         #x = self.norm(x)
-        return x_new/self.sqrt_d
+        return x_new
 ############### Riêng phần này nếu để học đang gặp vấn đề rất lớn. Lý do ở đây là ta muốn nó hội tụ dần về tầm 0.001;
 #  nhưng grad của nó lớn hơn nhiều so với giá trị lambda, do được scale sqrt(dim) nên dù có nhân với lr thì cx ko đủ đô.
 
@@ -569,8 +569,10 @@ class Trainer:
             if (i==len(self.train_loader)-1) and (self.neptune_run):
                 if self.args.use_rp == True and self.args.lambda_value == None:
                     self.neptune_run["Lambda/Linear"].append(self.model.rp.lambda_param)
+                    self.neptune_run["Grad_Lambda/Linear"].append(self.model.rp.lambda_param.grad)
                 if self.args.use_cnn_rp == True and self.args.cnn_lambda_value == None:
                     self.neptune_run["Lambda/CNN"].append(self.model.cnn_rp.lambda_param)
+                    self.neptune_run["Grad_Lambda/CNN"].append(self.model.cnn_rp.lambda_param.grad)
 
             if (i + 1) % self.gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
