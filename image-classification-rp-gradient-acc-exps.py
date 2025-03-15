@@ -139,11 +139,11 @@ class RanPACLayer(nn.Module):
         self.projection.weight.requires_grad = False
         nn.init.normal_(self.projection.weight, mean=0, std=1.0)  ## randn
         if lambda_value:
-            self.sqrt_d = math.sqrt(1)
+            self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = lambda_value  
             self.clamp = False
         else:
-            self.sqrt_d = math.sqrt(1)
+            self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = nn.Parameter(torch.tensor(0.02))  ########
             self.clamp = False
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
@@ -182,7 +182,7 @@ class RanPACLayer(nn.Module):
         elif self.non_linearities == 'exp':
             x_new = torch.exp(x)
         #x = self.norm(x)
-        return x_new
+        return x_new/self.sqrt_d
 ############### Riêng phần này nếu để học đang gặp vấn đề rất lớn. Lý do ở đây là ta muốn nó hội tụ dần về tầm 0.001;
 #  nhưng grad của nó lớn hơn nhiều so với giá trị lambda, do được scale sqrt(dim) nên dù có nhân với lr thì cx ko đủ đô.
 
@@ -319,7 +319,7 @@ class CNNRandomProjection(nn.Module):
 
         #x_new = self.batch_norm(x_new)
         
-        return x_new
+        return x_new/self.sqrt_d
 ######################## channel_based vectors --> learnable lambda (0.01 -- 0.1) khởi tạo 0.05
 
 ### Torch sẽ tự khởi tạo, ko cần thiết
