@@ -182,7 +182,7 @@ class RanPACLayer(nn.Module):
         elif self.non_linearities == 'exp':
             x_new = torch.exp(x)
         #x = self.norm(x)
-        return x_new
+        return x_new/self.sqrt_d
 ############### Riêng phần này nếu để học đang gặp vấn đề rất lớn. Lý do ở đây là ta muốn nó hội tụ dần về tầm 0.001;
 #  nhưng grad của nó lớn hơn nhiều so với giá trị lambda, do được scale sqrt(dim) nên dù có nhân với lr thì cx ko đủ đô.
 
