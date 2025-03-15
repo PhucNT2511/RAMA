@@ -139,7 +139,7 @@ class RanPACLayer(nn.Module):
         self.projection.weight.requires_grad = False
         nn.init.normal_(self.projection.weight, mean=0, std=1.0)  ## randn
         if lambda_value:
-            self.sqrt_d = math.sqrt(input_dim)
+            self.sqrt_d = math.sqrt(1)
             self.lambda_param = lambda_value  
             self.clamp = False
         else:
