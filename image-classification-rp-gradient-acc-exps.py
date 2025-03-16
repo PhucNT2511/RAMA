@@ -145,7 +145,7 @@ class RanPACLayer(nn.Module):
         else:
             self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = nn.Parameter(torch.tensor(0.01))  ########
-            self.clamp = False
+            self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
         self.non_linearities = non_linearities
 
@@ -173,6 +173,7 @@ class RanPACLayer(nn.Module):
             self.lambda_param.data.clamp_(0, 1.0)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
+        x = self.norm(x)
         if self.non_linearities == 'leaky_relu':
             x_new = nn.functional.leaky_relu(x, negative_slope=self.negative_slope_leaky_relu)
         elif self.non_linearities == 'sigmoid':
@@ -182,7 +183,7 @@ class RanPACLayer(nn.Module):
         elif self.non_linearities == 'exp':
             x_new = torch.exp(x)
         #x = self.norm(x)
-        return x_new/self.sqrt_d
+        return x_new
 ############### Riêng phần này nếu để học đang gặp vấn đề rất lớn. Lý do ở đây là ta muốn nó hội tụ dần về tầm 0.001;
 #  nhưng grad của nó lớn hơn nhiều so với giá trị lambda, do được scale sqrt(dim) nên dù có nhân với lr thì cx ko đủ đô.
 
