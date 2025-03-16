@@ -230,7 +230,7 @@ class CNNRandomProjection(nn.Module):
 '''
 
 class CNNRandomProjection(nn.Module):
-    def __init__(self, C, H, W, lambda_value=None, resemble="partial", vector_based = 'column', non_linearities = 'leaky_relu', negative_slope_leaky_relu: float = 0.2):
+    def __init__(self, C, H, W, lambda_value=None, resemble="partial", vector_based = 'column', non_linearities = 'leaky_relu', negative_slope_leaky_relu: float = 0.2, num_projection: int = 1):
         '''
         vector_based: decomposition vectors, i.e use column vectors
         resemble: use the same matrix U for all channels: full, partial, separate
@@ -351,7 +351,8 @@ class ClassificationModel(nn.Module):
                  lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
                  cnn_lambda_value: Optional[float] = None, num_input_channels: int = 3,
                  resemble: str = "partial", vector_based: str = 'column', pretrained: bool = False,
-                 non_linearities: str = 'leaky_relu', negative_slope_leaky_relu: float = 0.2):
+                 non_linearities: str = 'leaky_relu', negative_slope_leaky_relu: float = 0.2,
+                 num_projection: int = 1):
         """
         Args:
             model_type: Type of base model architecture
@@ -396,7 +397,9 @@ class ClassificationModel(nn.Module):
             )
 
             if use_cnn_rp:
-                self.cnn_rp = CNNRandomProjection(256,8,8,lambda_value=self.cnn_lambda_value,resemble=resemble, vector_based= vector_based, non_linearities = non_linearities, negative_slope_leaky_relu= negative_slope_leaky_relu)
+                self.cnn_rp = CNNRandomProjection(256,8,8,lambda_value=self.cnn_lambda_value,resemble=resemble, 
+                                                  vector_based= vector_based, non_linearities = non_linearities, 
+                                                  negative_slope_leaky_relu= negative_slope_leaky_relu, num_projection = num_projection)
             
             self.features2 = nn.Sequential(
                 base_model.layer4,
@@ -405,7 +408,9 @@ class ClassificationModel(nn.Module):
             self.feature_dim = base_model.fc.in_features
 
             if use_rp:
-                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, lambda_value=self.lambda_value, non_linearities = non_linearities, negative_slope_leaky_relu = negative_slope_leaky_relu)
+                self.rp = RanPACLayer(self.feature_dim, self.feature_dim, lambda_value=self.lambda_value, 
+                                      non_linearities = non_linearities, negative_slope_leaky_relu = negative_slope_leaky_relu, 
+                                      num_projection = num_projection)
             
             self.features3 = nn.Sequential(
                 nn.Linear(self.feature_dim, num_classes)
@@ -667,7 +672,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         exp_name += f"_RP{args.lambda_value}"
     if args.use_cnn_rp:
         exp_name += f"_CNN_RP{args.cnn_lambda_value}"
-    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_vector_based{args.vector_based}_pretrained{args.pretrained}_bs{args.batch_size}_non_linearities{args.non_linearities}_g{args.gradient_accumulation_steps}"
+    exp_name += f"_lr{args.initial_lr}_optim{args.optim}_resemble{args.resemble}_vector_based{args.vector_based}_pretrained{args.pretrained}_bs{args.batch_size}_non_linearities{args.non_linearities}_num_proj{args.num_projection}_g{args.gradient_accumulation_steps}"
     if args.non_linearities == "leaky_relu":
         exp_name += f"_negative_slope_leaky_relu_{args.negative_slope_leaky_relu}"
     return exp_name
@@ -700,6 +705,7 @@ def main():
     parser.add_argument("--dataset", type=DatasetType, choices=list(DatasetType), required=True, help="Dataset type")
     parser.add_argument("--use_rp", type=bool, default=False, help="Use randomized projection")
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
+    parser.add_argument("--num_projection", type=int, default=1, help="Number of projection for RP")
     parser.add_argument("--use_cnn_rp", type=bool, default=False, help="Use randomized projection for CNN layer")
     parser.add_argument("--cnn_lambda_value", type=float, default=None, help="Lambda value for RP in CNN layer")
     parser.add_argument("--resemble", type=str, default="partial", help="Same U matrix for RAMA in CNN layer")
@@ -746,6 +752,7 @@ def main():
         "learning_rate": args.initial_lr,
         "epochs": args.epochs,
         "non_linearities": args.non_linearities,
+        "num_projection": args.num_projection,
     }
     if args.optim == 'SGD':
         config.update({     "momentum": args.momentum,
@@ -787,6 +794,7 @@ def main():
         pretrained = args.pretrained,
         non_linearities = args.non_linearities,
         negative_slope_leaky_relu = args.negative_slope_leaky_relu,
+        num_projection = args.num_projection,
     )
 
     print(model)
