@@ -132,10 +132,11 @@ class RanPACLayer(nn.Module):
         output_dim (int): Output dimension.
         lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
         norm_type (str): Normalization type, either "batch" or "layer".
+        num_projection (int): Number of RAMA projection
     """
-    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, non_linearities: str = 'leaky_relu', norm_type: str = "batch", negative_slope_leaky_relu: float = 0.2):
+    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, non_linearities: str = 'leaky_relu', norm_type: str = "batch", negative_slope_leaky_relu: float = 0.2, num_projection: int = 1):
         super(RanPACLayer, self).__init__()
-        self.projection = nn.Linear(input_dim, output_dim, bias=False)
+        self.projection = nn.Linear(input_dim, num_projection*output_dim, bias=False) 
         self.projection.weight.requires_grad = False
         nn.init.normal_(self.projection.weight, mean=0, std=1.0)  ## randn
         if lambda_value:
@@ -146,10 +147,11 @@ class RanPACLayer(nn.Module):
             self.sqrt_d = math.sqrt(input_dim)
             self.lambda_param = nn.Parameter(torch.tensor(0.01))  ########
             self.clamp = True
-        self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
+        self.norm = nn.BatchNorm1d(output_dim*num_projection) if norm_type == "batch" else nn.LayerNorm(output_dim*num_projection)
         self.non_linearities = non_linearities
-
         self.negative_slope_leaky_relu = negative_slope_leaky_relu 
+        self.output_dim = output_dim
+        self.num_projection = num_projection
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -174,6 +176,7 @@ class RanPACLayer(nn.Module):
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         x = self.norm(x)
+        
         if self.non_linearities == 'leaky_relu':
             x_new = nn.functional.leaky_relu(x, negative_slope=self.negative_slope_leaky_relu)
         elif self.non_linearities == 'sigmoid':
@@ -182,8 +185,14 @@ class RanPACLayer(nn.Module):
             x_new = nn.functional.tanh(x)
         elif self.non_linearities == 'exp':
             x_new = torch.exp(x)
+
+        # Reshape projections to separate each projection for averaging
+        x_new = x_new.reshape(x_new.shape[0], self.num_projection, self.output_dim)
+        x_avg = x_new.mean(dim=1)
+
         #x = self.norm(x)
-        return x_new
+        return x_avg
+    
 ############### Riêng phần này nếu để học đang gặp vấn đề rất lớn. Lý do ở đây là ta muốn nó hội tụ dần về tầm 0.001;
 #  nhưng grad của nó lớn hơn nhiều so với giá trị lambda, do được scale sqrt(dim) nên dù có nhân với lr thì cx ko đủ đô.
 
