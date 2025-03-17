@@ -145,7 +145,7 @@ class RanPACLayer(nn.Module):
             self.clamp = False
         else:
             self.sqrt_d = math.sqrt(input_dim)
-            self.lambda_param = nn.Parameter(torch.tensor(0.15))  ########
+            self.lambda_param = nn.Parameter(torch.tensor(0.1))  ########
             self.clamp = True
         self.norm = nn.BatchNorm1d(output_dim*num_projection) if norm_type == "batch" else nn.LayerNorm(output_dim*num_projection)
         self.non_linearities = non_linearities
@@ -172,10 +172,10 @@ class RanPACLayer(nn.Module):
         '''
         # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.08, 0.2)
+            self.lambda_param.data.clamp_(0.0005, 0.2)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
-        x = self.norm(x)
+        #x = self.norm(x)
         
         if self.non_linearities == 'leaky_relu':
             x_new = nn.functional.leaky_relu(x, negative_slope=self.negative_slope_leaky_relu)
@@ -190,7 +190,7 @@ class RanPACLayer(nn.Module):
         x_new = x_new.reshape(x_new.shape[0], self.num_projection, self.output_dim)
         x_avg = x_new.mean(dim=1)
 
-        #x = self.norm(x)
+        x = self.norm(x)
         return x_avg
     
 ############### Riêng phần này nếu để học đang gặp vấn đề rất lớn. Lý do ở đây là ta muốn nó hội tụ dần về tầm 0.001;
