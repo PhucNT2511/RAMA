@@ -172,7 +172,7 @@ class RanPACLayer(nn.Module):
         '''
         # Break graph
         if self.clamp:
-            self.lambda_param.data.clamp_(0.005, 0.3)
+            self.lambda_param.data.clamp_(0.05, 0.2)
 
         x = self.projection(x) * self.lambda_param  * self.sqrt_d
         x = self.norm(x)
