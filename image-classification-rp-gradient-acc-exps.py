@@ -339,18 +339,15 @@ class CNNRandomProjection(nn.Module):
             K1 = H
             K2 = W
 
-        # Create the projection matrices A for each projection
-        self.A_list = nn.ModuleList()  # Use a ModuleList to hold multiple projection matrices
-        for _ in range(num_projection):
-            if resemble == "full":
-                A = torch.randn(size, size)  
-            elif resemble == "partial":
-                A = torch.randn(K1, size, size)
-            elif resemble == "separate":
-                A = torch.randn(K1, K2, size, size)
-
-            A.requires_grad = False  # No gradient updates for the projection matrices
-            self.A_list.append(A)
+        # Create the projection tensor A
+        if resemble == "full":
+            A = torch.randn(num_projection, size, size)  
+        elif resemble == "partial":
+            A = torch.randn(num_projection, K1, size, size)
+        elif resemble == "separate":
+            A = torch.randn(num_projection, K1, K2, size, size)
+        A.requires_grad = False
+        self.A = A
 
         self.sqrt_d = math.sqrt(size)  # Scaling factor based on the size of A
 
@@ -360,7 +357,7 @@ class CNNRandomProjection(nn.Module):
             self.clamp = False
         else:
             self.lambda_param = nn.Parameter(torch.tensor(0.3))
-            self.clamp = False
+            self.clamp = True
 
         # Batch Normalization layer to normalize the output across the channels
         self.batch_norm = nn.BatchNorm2d(C)
@@ -377,67 +374,56 @@ class CNNRandomProjection(nn.Module):
         Returns:
             torch.Tensor: Transformed tensor after applying random projection, scaling, and non-linearity.
         """
-        # Move projection matrices to the same device as input tensor
-        self.A_list = [A.to(x.device) for A in self.A_list]
+        self.A = self.A.to(x.device)
 
-        # Initialize a list to store projections for all the random projections
-        x_proj_list = []
+        # Perform the random projection based on the chosen configuration
+        if self.base == "column":
+            # Projection along the column axis (N, C, H, W)
+            if self.resemble == "full":
+                x_new = torch.einsum('tih,nchw->ntciw', self.A, x)
+            elif self.resemble == "partial":
+                x_new = torch.einsum('tcih,nchw->ntciw', self.A, x)
+            elif self.resemble == "separate":
+                x_new = torch.einsum('tcwih,nchw->ntciw', self.A, x)
+        elif self.base == "row":
+            # Projection along the row axis (N, C, H, W) - permute for alignment
+            if self.resemble == "full":
+                x_new = torch.einsum('tih,nchw->ntciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+            elif self.resemble == "partial":
+                x_new = torch.einsum('tcih,nchw->ntciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+            elif self.resemble == "separate":
+                x_new = torch.einsum('tcwih,nchw->ntciw', self.A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
+        elif self.base == "channel":
+            # Projection along the channel axis (N, C, H, W) - permute for alignment
+            if self.resemble == "full":
+                x_new = torch.einsum('tih,nchw->ntciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
+            elif self.resemble == "partial":
+                x_new = torch.einsum('tcih,nchw->ntciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
+            elif self.resemble == "separate":
+                x_new = torch.einsum('tcwih,nchw->ntciw', self.A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
 
-        # Iterate over each projection matrix and apply the projection
-        for i in range(self.num_projection):
-            A = self.A_list[i]
+        # Apply lambda scaling
+        if self.clamp:
+            self.lambda_param.data.clamp_(0.2, 0.5)
 
-            # Perform the random projection based on the chosen configuration
-            if self.base == "column":
-                # Projection along the column axis (N, C, H, W)
-                if self.resemble == "full":
-                    x_new = torch.einsum('ih,nchw->nciw', A, x)
-                elif self.resemble == "partial":
-                    x_new = torch.einsum('cih,nchw->nciw', A, x)
-                elif self.resemble == "separate":
-                    x_new = torch.einsum('cwih,nchw->nciw', A, x)
-            elif self.base == "row":
-                # Projection along the row axis (N, C, H, W) - permute for alignment
-                if self.resemble == "full":
-                    x_new = torch.einsum('ih,nchw->nciw', A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
-                elif self.resemble == "partial":
-                    x_new = torch.einsum('cih,nchw->nciw', A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
-                elif self.resemble == "separate":
-                    x_new = torch.einsum('cwih,nchw->nciw', A, x.permute(0, 1, 3, 2)).permute(0, 1, 3, 2)
-            elif self.base == "channel":
-                # Projection along the channel axis (N, C, H, W) - permute for alignment
-                if self.resemble == "full":
-                    x_new = torch.einsum('ih,nchw->nciw', A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
-                elif self.resemble == "partial":
-                    x_new = torch.einsum('cih,nchw->nciw', A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
-                elif self.resemble == "separate":
-                    x_new = torch.einsum('cwih,nchw->nciw', A, x.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
+        # Scale the output of the random projection by lambda and sqrt_d
+        x_new = x_new * self.lambda_param * self.sqrt_d
 
-            # Apply lambda scaling
-            if self.clamp:
-                self.lambda_param.data.clamp_(0.2, 0.5)
-
-            # Scale the output of the random projection by lambda and sqrt_d
-            x_new = x_new * self.lambda_param * self.sqrt_d
-
-            # Apply non-linearity based on the selected activation function
-            if self.non_linearities == 'leaky_relu':
-                x_new = nn.functional.leaky_relu(x_new, negative_slope=self.negative_slope_leaky_relu)
-            elif self.non_linearities == 'sigmoid':
-                x_new = nn.functional.sigmoid(x_new)
-            elif self.non_linearities == 'tanh':
-                x_new = nn.functional.tanh(x_new)
-            elif self.non_linearities == 'relu':
-                x_new = nn.functional.relu(x_new)
-
-            # Add the projection result to the list
-            x_proj_list.append(x_new)
+        # Apply non-linearity based on the selected activation function
+        if self.non_linearities == 'leaky_relu':
+            x_new = nn.functional.leaky_relu(x_new, negative_slope=self.negative_slope_leaky_relu)
+        elif self.non_linearities == 'sigmoid':
+            x_new = nn.functional.sigmoid(x_new)
+        elif self.non_linearities == 'tanh':
+            x_new = nn.functional.tanh(x_new)
+        elif self.non_linearities == 'relu':
+            x_new = nn.functional.relu(x_new)
 
         # Optionally, apply batch normalization (currently commented out)
         # x_new = self.batch_norm(x_new)
 
         # Return the projections combined into a single tensor (averaging them)
-        return torch.stack(x_proj_list, dim=1).mean(dim=1)  # Averaging across projections
+        return x_new.mean(dim=1)  # Averaging across projections
 
 ######################## channel_based vectors --> learnable lambda (0.01 -- 0.1) Initialize 0.05
 
