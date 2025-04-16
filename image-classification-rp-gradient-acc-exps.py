@@ -8,11 +8,14 @@ Example usage:
 
 import argparse
 import logging
+import math
 import os
-from typing import Optional, Tuple
+import random
 from enum import Enum
-from datetime import datetime
+from typing import Optional, Tuple
 
+import neptune
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -20,18 +23,17 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import resnet18, vgg16, ResNet18_Weights, VGG16_Weights
-from transformers import ViTModel, ViTConfig, ViTForImageClassification
-import torch.nn.init as init
-import neptune
-import random
-import numpy as np
-import math
+from torchvision.models import ResNet18_Weights, VGG16_Weights, resnet18, vgg16
+from transformers import ViTConfig, ViTForImageClassification, ViTModel
 
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PROJECT")
+NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN")
+
 
 class ModelType(Enum):
     """Supported model architectures."""
@@ -45,6 +47,7 @@ class DatasetType(Enum):
     CIFAR100 = "CIFAR100" #100
     IMAGENET_A = "ImageNet-A" #1000
     OMNIBENCHMARK = "OmniBenchmark" #1623
+
 
 def set_seed(seed):
     random.seed(seed)
@@ -197,6 +200,7 @@ class RanPACLayer(nn.Module):
 
         return x_avg
 
+
 class EnhancedRanPACLayer(nn.Module):
     """
     An enhanced randomized projection layer with feature-wise scaling and multiple projection options.
@@ -302,7 +306,7 @@ class CNNRandomProjection(nn.Module):
     def __init__(self, C, H, W, lambda_value: Optional[float] = None, resemble: str = "partial", 
                  vector_based: str = 'column', non_linearities: str = 'leaky_relu', 
                  negative_slope_leaky_relu: float = 0.2, num_projection: int = 1):
-        '''
+        """
         Initializes the CNN Random Projection Layer.
 
         Args:
@@ -318,7 +322,7 @@ class CNNRandomProjection(nn.Module):
                                     Options: 'leaky_relu', 'sigmoid', 'tanh', 'relu'.
             negative_slope_leaky_relu (float): Negative slope value for the leaky relu activation function. Default is 0.2.
             num_projection (int): Number of random projections to use. Default is 1.
-        '''
+        """
         super(CNNRandomProjection, self).__init__()
         self.resemble = resemble
         self.base = vector_based
@@ -425,10 +429,12 @@ class CNNRandomProjection(nn.Module):
         # Return the projections combined into a single tensor (averaging them)
         return x_new.mean(dim=1)  # Averaging across projections
 
-######################## channel_based vectors --> learnable lambda (0.01 -- 0.1) Initialize 0.05
 
 class ClassificationModel(nn.Module):
-    """Classification model with configurable architecture."""
+    """Classification model with configurable architecture.
+
+    channel_based vectors --> learnable lambda (0.01 -- 0.1) Initialize 0.05
+    """
     
     def __init__(self, model_type: ModelType, num_classes: int, use_rp: bool = False,
                  lambda_value: Optional[float] = None, use_cnn_rp: bool = False,
@@ -632,7 +638,6 @@ class ClassificationModel(nn.Module):
         return self.features3(x)
 
 
-
 class Trainer:
     """Handles model training and evaluation."""
     def __init__(self, model: nn.Module, train_loader: DataLoader, test_loader: DataLoader,
@@ -653,7 +658,7 @@ class Trainer:
         self.test_loader = test_loader
         self.device = device
         self.exp_dir = exp_dir
-        self.args = args ################
+        self.args = args
         self.gradient_accumulation_steps = args.gradient_accumulation_steps
         self.neptune_run = neptune_run
         self.checkpoint_dir = os.path.join(exp_dir, "checkpoints")
@@ -720,11 +725,11 @@ class Trainer:
             correct += outputs.max(1)[1].eq(labels).sum().item()
             total += labels.size(0)
 
-            if (i==len(self.train_loader)-1) and (self.neptune_run):
-                if self.args.use_rp == True and self.args.lambda_value == None:
+            if i == len(self.train_loader) - 1 and self.neptune_run:
+                if self.args.use_rp == True and self.args.lambda_value is None:
                     self.neptune_run["Lambda/Linear"].append(self.model.rp.lambda_param)
                     self.neptune_run["Grad_Lambda/Linear"].append(self.model.rp.lambda_param.grad)
-                if self.args.use_cnn_rp == True and self.args.cnn_lambda_value == None:
+                if self.args.use_cnn_rp == True and self.args.cnn_lambda_value is None:
                     self.neptune_run["Lambda/CNN"].append(self.model.cnn_rp.lambda_param)
                     self.neptune_run["Grad_Lambda/CNN"].append(self.model.cnn_rp.lambda_param.grad)
 
@@ -805,7 +810,6 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     Returns:
         str: Formatted experiment name
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     exp_name = f"{args.model.value}_{args.dataset.value}"
     if args.use_rp:
         exp_name += f"_RP{args.lambda_value}"
@@ -840,8 +844,8 @@ def main():
     """Main entry point for training script."""
     parser = argparse.ArgumentParser()
     # Model and dataset arguments
-    parser.add_argument("--model", type=ModelType, choices=list(ModelType), required=True, help="Model type")
-    parser.add_argument("--dataset", type=DatasetType, choices=list(DatasetType), required=True, help="Dataset type")
+    parser.add_argument("--model", type=ModelType, choices=list(ModelType), required=False, default="ResNet18", help="Model type")
+    parser.add_argument("--dataset", type=DatasetType, choices=list(DatasetType), required=False, default="CIFAR100", help="Dataset type")
     parser.add_argument("--use_rp", type=bool, default=False, help="Use randomized projection")
     parser.add_argument("--lambda_value", type=float, default=None, help="Lambda value for RP")
     parser.add_argument("--num_projection", type=int, default=1, help="Number of projection for RP")
@@ -850,33 +854,33 @@ def main():
     parser.add_argument("--resemble", type=str, default="partial", help="Same U matrix for RAMA in CNN layer")
     parser.add_argument("--vector_based", type=str, default='column', help="Vectorization followed columns or not")
     parser.add_argument("--pretrained", type=bool, default=False, help="Use pre-trained weights")
-    parser.add_argument("--non_linearities", type=str, default='leaky_relu', help="Choose non-linear function")
+    parser.add_argument("--non_linearities", type=str, default='relu', help="Choose non-linear function")
     parser.add_argument("--negative_slope_leaky_relu", type=float, default=0.2, help="Choose value for negative_slope_leaky_relu")
+
     # Training hyperparameters
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size per GPU")
     parser.add_argument("--num_classes", type=int, default=100, help="Number of classes")
-    parser.add_argument("--initial_lr", type=float, default=0.1, help="Initial learning rate") 
-    ###LEARNING_RATE = 1e-04 for Adam, 0.1 for SGD 
+    parser.add_argument("--initial_lr", type=float, default=0.01, help="Initial learning rate")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of steps to accumulate gradients")
     parser.add_argument("--epochs", type=int, default=200, help="Number of training epochs")
-    #Optimization
+    # Optimization
     parser.add_argument("--optim", type=str, default='SGD', help="Choose optimization algorithm")
     parser.add_argument("--weight_decay", type=float, default=5e-4, help="Weight decay coefficient")
+
     # SGD Optimization
     parser.add_argument("--momentum", type=float, default=0.9, help="SGD momentum")
     parser.add_argument("--nesterov", type=bool, default=True, help="Use Nesterov momentum")
     parser.add_argument("--warmup_epochs", type=int, default=5, help="Number of warmup epochs")
+
     # Adam Optimization
     parser.add_argument("--beta1", type=float, default=0.9, help="Beta1 in Adam")
     parser.add_argument("--beta2", type=float, default=0.999, help="Beta2 in Adam")
     parser.add_argument("--epsilon", type=float, default=1e-8, help="epsilon in Adam")
-    
     args = parser.parse_args()
 
     exp_name = get_experiment_name(args)
     exp_dir = setup_experiment_folders(exp_name)
     logger.info(f"Starting experiment: {exp_name}")
-    
     config = {
         "model_type": args.model.value,
         "dataset_type": args.dataset.value,
@@ -893,60 +897,59 @@ def main():
         "num_projection": args.num_projection,
     }
     if args.optim == 'SGD':
-        config.update({     "momentum": args.momentum,
-                            "weight_decay": args.weight_decay,
-                            "nesterov": args.nesterov,
-                            "warmup_epochs": args.warmup_epochs,
-                            "optim": args.optim
-                    })
+        config.update(
+            {
+                "momentum": args.momentum,
+                "weight_decay": args.weight_decay,
+                "nesterov": args.nesterov,
+                "warmup_epochs": args.warmup_epochs,
+                "optim": args.optim
+            }
+        )
     else:
         args.weight_decay = 1e-5
-        config.update({   
-                            "weight_decay": args.weight_decay,
-                            "beta1": args.beta1,
-                            "beta2": args.beta2,
-                            "epsilon": args.epsilon,
-                            "optim": args.optim
-                    })
-
-    neptune_run = neptune.init_run(
-        project="phuca1tt1bn/RAMA",
-        api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ==",
-        name=exp_name
-    )
-    neptune_run["config"] = config
+        config.update(
+            {   
+                "weight_decay": args.weight_decay,
+                "beta1": args.beta1,
+                "beta2": args.beta2,
+                "epsilon": args.epsilon,
+                "optim": args.optim
+            }
+        )
+    
+    if NEPTUNE_PRJ_NAME and NEPTUNE_API_TOKEN:
+        neptune_run = neptune.init_run(project=NEPTUNE_PRJ_NAME, api_token=NEPTUNE_API_TOKEN, name=exp_name)
+        neptune_run["config"] = config
+    else:
+        neptune_run = None
 
     dataset_manager = DatasetManager(args.dataset)
     train_loader, test_loader = dataset_manager.get_loaders(batch_size=args.batch_size)
-
     model = ClassificationModel(
         model_type=args.model,
         num_classes=args.num_classes,
         use_rp=args.use_rp,
         lambda_value=args.lambda_value,
-        use_cnn_rp = args.use_cnn_rp,
-        cnn_lambda_value = args.cnn_lambda_value,
-        num_input_channels= 1 if args.dataset.value == "OmniBenchmark" else 3,
-        resemble = args.resemble,
-        vector_based = args.vector_based,
-        pretrained = args.pretrained,
-        non_linearities = args.non_linearities,
-        negative_slope_leaky_relu = args.negative_slope_leaky_relu,
-        num_projection = args.num_projection,
+        use_cnn_rp=args.use_cnn_rp,
+        cnn_lambda_value=args.cnn_lambda_value,
+        num_input_channels=(
+            1 if args.dataset.value == "OmniBenchmark" else 3
+        ),
+        resemble=args.resemble,
+        vector_based=args.vector_based,
+        pretrained=args.pretrained,
+        non_linearities=args.non_linearities,
+        negative_slope_leaky_relu=args.negative_slope_leaky_relu,
+        num_projection=args.num_projection,
     )
 
-    print(model)
     logger.info(f"Model initialized: {model}")
-    trainer = Trainer(
-        model,
-        train_loader,
-        test_loader,
+    logger.info(model)
+    trainer = Trainer(model, train_loader, test_loader,
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-        exp_dir=exp_dir,
-        args=args,
-        neptune_run=neptune_run
+        exp_dir=exp_dir, args=args, neptune_run=neptune_run
     )
-
     writer = SummaryWriter(log_dir=os.path.join(exp_dir, "logs"))
     trainer.train(writer, epochs=args.epochs)
     writer.close()
@@ -956,4 +959,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
