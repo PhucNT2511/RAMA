@@ -571,7 +571,7 @@ def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with ResNet-18')
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
-    parser.add_argument('--epochs', default=10, type=int, help='number of epochs')  # 15, 20
+    parser.add_argument('--epochs', default=30, type=int, help='number of epochs')  # 15, 20
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
     parser.add_argument('--data-dir', default='./data', help='data directory')
     parser.add_argument('--checkpoint-dir', default='./checkpoints', help='checkpoint directory')
@@ -583,12 +583,12 @@ def parse_args():
 
     parser.add_argument('--lambda-min', default=0.01, type=float, help='minimum lambda value for optimization')
     parser.add_argument('--lambda-max', default=0.1, type=float, help='maximum lambda value for optimization')
-    parser.add_argument('--bayes-init-points', default=3, type=int, help='number of initial points for Bayesian optimization')  # 3
-    parser.add_argument('--bayes-n-iter', default=5, type=int, help='number of iterations for Bayesian optimization')  # 20
+    parser.add_argument('--bayes-init-points', default=5, type=int, help='number of initial points for Bayesian optimization')  # 3
+    parser.add_argument('--bayes-n-iter', default=15, type=int, help='number of iterations for Bayesian optimization')  # 20
     parser.add_argument('--bayes-acq', default="ei", choices=["ucb", "ei", "poi"], help='acquisition function for Bayesian optimization')
     parser.add_argument('--bayes-xi', default=0.01, type=float, help='exploration-exploitation parameter for ei/poi')
     parser.add_argument('--bayes-kappa', default=2.5, type=float, help='exploration-exploitation parameter for ucb')
-    parser.add_argument('--optimize-every', default=1, type=int, help='optimize lambda every N epochs')  # 4
+    parser.add_argument('--optimize-every', default=4, type=int, help='optimize lambda every N epochs')  # 4
 
     parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid'], help='activation for enhanced RAMA')
     parser.add_argument('--seed', type=int, default=42, help='random seed')
