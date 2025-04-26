@@ -122,7 +122,7 @@ class SwinT(nn.Module):
         
         # Create Bernoulli RAMA layer before the linear layer in the network
         if use_rama:
-            self.rama_linearLayer = BernoulliRAMALayer(
+            self.rama_linearLayer = GaussianRAMALayer(
                 self.feature_dim, 
                 self.feature_dim, 
                 rama_config['p_value'], 
