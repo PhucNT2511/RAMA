@@ -16,6 +16,7 @@ import torchvision.transforms as transforms
 from torchvision.models import swin_t
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
+import math
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +56,7 @@ class GaussianRAMALayer(nn.Module):
         projection = torch.randn(input_dim, output_dim)
         self.projection = nn.Parameter(projection, requires_grad=False)
 
-        self.sqrt_d = torch.sqrt(input_dim)
+        self.sqrt_d = math.sqrt(input_dim)
 
         # Add layer normalization for stabilizing the output distribution.
         if use_normalization:
