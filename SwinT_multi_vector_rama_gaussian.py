@@ -57,6 +57,7 @@ class GaussianRAMALayer(nn.Module):
         self.projection = nn.Parameter(projection, requires_grad=False)
 
         self.sqrt_d = math.sqrt(input_dim)
+        self.lambda_value = p_value
 
         # Add layer normalization for stabilizing the output distribution.
         if use_normalization:
@@ -74,7 +75,7 @@ class GaussianRAMALayer(nn.Module):
         
         out = x @ self.projection
 
-        out *= self.sqrt_d * p_value
+        out *= self.sqrt_d * self.lambda_value
 
         # Apply normalization if specified
         if self.use_normalization:
