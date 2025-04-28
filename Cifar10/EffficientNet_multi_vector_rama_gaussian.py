@@ -13,7 +13,7 @@ import torch.optim as optim
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
-from torchvision.models import swin_t
+from torchvision.models import efficientnet_b2
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
@@ -93,14 +93,11 @@ class GaussianRAMALayer(nn.Module):
             out = torch.sigmoid(out)
         return out
 
-
-class SwinT(nn.Module):
+class EfficientNet(nn.Module):
     """
-    Modified SwinT architecture with Gaussian RAMA layers at multiple positions.
+    Modified EfficientNet-B2 architecture with Gaussian RAMA layers at multiple positions.
     
     Args:
-        block (nn.Module): Block type to use for the network.
-        num_blocks (List[int]): Number of blocks in each layer.
         num_classes (int): Number of output classes. Default: 10.
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
@@ -118,10 +115,10 @@ class SwinT(nn.Module):
                     "sqrt_dim": False,
                 }
             
-        self.backbone = swin_t(weights=None)
-        self.feature_dim = self.backbone.head.in_features
+        self.backbone = efficientnet_b2(weights=None)
+        self.feature_dim = self.backbone.classifier[1].in_features
 
-        self.features = nn.Sequential(*list(self.backbone.children())[:-1]) 
+        self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
         
         # Create Gaussian RAMA layer before the linear layer in the network
         if use_rama:
@@ -134,7 +131,13 @@ class SwinT(nn.Module):
                 rama_config.get('sqrt_dim', False),
             )
 
+        # Dropout và Linear
+        self.dropout = nn.Dropout(p=0.3, inplace=False)
         self.fc = nn.Linear(self.feature_dim, num_classes)
+        self.features_2 = nn.Sequential(
+            self.dropout,
+            self.fc
+        )
         
         # Initialize hooks for feature extraction
         self.hooks = []
@@ -142,8 +145,10 @@ class SwinT(nn.Module):
         self.after_rama_features = None
 
     def forward(self, x, lambda_value):
-        """Forward pass through the Swin_T model with Gaussian RAMA layers."""
-        out = self.features(x)
+        """Forward pass through the EfficientNet-B2 model with Gaussian RAMA layers."""
+        out = self.features_1(x)
+
+        out = torch.flatten(out, 1)
 
         # Store features before RAMA for evaluation
         if self.use_rama:
@@ -153,8 +158,8 @@ class SwinT(nn.Module):
         if self.use_rama:
             out = self.rama_linearLayer(out, lambda_value)
             self.after_rama_features = out.detach().clone()
-            
-        out = self.fc(out)
+
+        out = self.features_2(out)
         
         return out
 
@@ -671,13 +676,13 @@ class Trainer:
 
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "SwinT"
+    exp_name = "EfficientNet_B2"
     exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
         exp_name += "_norm" if args.use_normalization else "_nonorm"
         exp_name += f"_{args.activation}"
-        exp_name += "_sqrt_d_True" if args.sqrt_dim else "_sqrt_d_False"
+        exp_name += "_sqrt_d" if args.sqrt_dim else "_sqrt_1"
 
         
     exp_name += f"_lr{args.lr}_epochs{args.epochs}_bs{args.batch_size}"
@@ -717,7 +722,7 @@ def set_seed(seed):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with SwinT and Gaussian RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with EfficientNet and Gaussian RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
@@ -781,7 +786,7 @@ def main():
     }
     
     # Create model
-    model = SwinT(
+    model = EfficientNet(
         num_classes=10, 
         use_rama=args.use_rama,
         rama_config=rama_config

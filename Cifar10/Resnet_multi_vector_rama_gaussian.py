@@ -13,7 +13,6 @@ import torch.optim as optim
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
-from torchvision.models import swin_t
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
@@ -93,10 +92,41 @@ class GaussianRAMALayer(nn.Module):
             out = torch.sigmoid(out)
         return out
 
-
-class SwinT(nn.Module):
+class ResidualBlock(nn.Module):
     """
-    Modified SwinT architecture with Gaussian RAMA layers at multiple positions.
+    Residual block with skip connection for ResNet architecture.
+    
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        stride (int): Stride for convolution. Default: 1.
+    """
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(ResidualBlock, self).__init__()
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels)
+        )
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+            
+    def forward(self, x):
+        out = self.conv_block(x)
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+
+
+class ResNet(nn.Module):
+    """
+    Modified ResNet architecture with Gaussian RAMA layers at multiple positions.
     
     Args:
         block (nn.Module): Block type to use for the network.
@@ -105,9 +135,9 @@ class SwinT(nn.Module):
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
     """
-    def __init__(self, num_classes=10, use_rama=False, rama_config=None):
-        super().__init__()
-        
+    def __init__(self, block, num_blocks, num_classes=10, use_rama=False, rama_config=None):
+        super(ResNet, self).__init__()
+        self.in_channels = 64
         self.use_rama = use_rama
         
         if rama_config is None:
@@ -118,14 +148,44 @@ class SwinT(nn.Module):
                     "sqrt_dim": False,
                 }
             
-        self.backbone = swin_t(weights=None)
-        self.feature_dim = self.backbone.head.in_features
-
-        self.features = nn.Sequential(*list(self.backbone.children())[:-1]) 
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU()
+        )
         
-        # Create Gaussian RAMA layer before the linear layer in the network
+        # Create standard ResNet blocks
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        
+        self.feature_dim = 512
+        
+        # Create Gaussian RAMA layers for different positions in the network
         if use_rama:
-            self.rama_linearLayer = GaussianRAMALayer(
+            # RAMA after layer2 (128 features)
+            self.rama_layer2 = GaussianRAMALayer(
+                128, 
+                128, 
+                rama_config['lambda_value'], 
+                rama_config.get('use_normalization', False),
+                rama_config.get('activation', 'relu'),
+                rama_config.get('sqrt_dim', False),
+            )
+            
+            # RAMA after layer3 (256 features)
+            self.rama_layer3 = GaussianRAMALayer(
+                256, 
+                256, 
+                rama_config['lambda_value'], 
+                rama_config.get('use_normalization', False),
+                rama_config.get('activation', 'relu'),
+                rama_config.get('sqrt_dim', False),
+            )
+            
+            # RAMA before final classification
+            self.rama_layer4 = GaussianRAMALayer(
                 self.feature_dim, 
                 self.feature_dim, 
                 rama_config['lambda_value'], 
@@ -133,7 +193,7 @@ class SwinT(nn.Module):
                 rama_config.get('activation', 'relu'),
                 rama_config.get('sqrt_dim', False),
             )
-
+            
         self.fc = nn.Linear(self.feature_dim, num_classes)
         
         # Initialize hooks for feature extraction
@@ -141,21 +201,56 @@ class SwinT(nn.Module):
         self.before_rama_features = None
         self.after_rama_features = None
 
-    def forward(self, x, lambda_value):
-        """Forward pass through the Swin_T model with Gaussian RAMA layers."""
-        out = self.features(x)
+    def _make_layer(self, block, out_channels, num_blocks, stride):
+        """Create a ResNet layer with the specified number of blocks."""
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_channels, out_channels, stride))
+            self.in_channels = out_channels
+        return nn.Sequential(*layers)
 
+    def forward(self, x, lambda_value):
+        """Forward pass through the ResNet model with Gaussian RAMA layers."""
+        out = self.conv1(x)
+        out = self.layer1(out)
+        
+        # After layer 1
+        out = self.layer2(out)
+        
+        # # Apply RAMA after layer2 (early in the network)
+        # if self.use_rama:
+        #     # Need to flatten, apply RAMA, then reshape back
+        #     batch_size, channels, h, w = out.shape
+        #     out_flat = out.view(batch_size, channels, -1).mean(dim=2)  # Global avg pooling per channel
+        #     out_flat = self.rama_layer2(out_flat, lambda_value)
+        #     # Broadcast back to spatial dimensions
+        #     out = out * out_flat.view(batch_size, channels, 1, 1)
+
+        out = self.layer3(out)
+        
+        # # Apply RAMA after layer3 (middle of the network)
+        # if self.use_rama:
+        #     batch_size, channels, h, w = out.shape
+        #     out_flat = out.view(batch_size, channels, -1).mean(dim=2)
+        #     out_flat = self.rama_layer3(out_flat, lambda_value)
+        #     out = out * out_flat.view(batch_size, channels, 1, 1)
+            
+        out = self.layer4(out)
+        out = F.avg_pool2d(out, 4)
+        out = out.view(out.size(0), -1)
+        
         # Store features before RAMA for evaluation
         if self.use_rama:
             self.before_rama_features = out.detach().clone()
             
         # Apply RAMA before final classification (original position)
         if self.use_rama:
-            out = self.rama_linearLayer(out, lambda_value)
+            out = self.rama_layer4(out, lambda_value)
+            # out = self.rama_layer4(out, None)
+            # Store features after RAMA for evaluation
             self.after_rama_features = out.detach().clone()
-            
         out = self.fc(out)
-        
         return out
 
     def forward_with_features(self, x, lambda_value):
@@ -669,9 +764,32 @@ class Trainer:
         logger.info(f"Best test accuracy: {self.best_acc:.2f}%")
         return self.best_acc
 
+
+def resnet18(num_classes=10, use_rama=False, rama_config=None):
+    """
+    Create a ResNet-18 model with optional Gaussian RAMA layers.
+    
+    Args:
+        num_classes (int): Number of output classes. Default: 10.
+        use_rama (bool): Whether to use RAMA layers. Default: False.
+        rama_config (dict): Configuration for RAMA layers. Default: None.
+        
+    Returns:
+        ResNet: ResNet-18 model.
+    """
+    model = ResNet(
+        ResidualBlock, 
+        [2, 2, 2, 2], 
+        num_classes=num_classes,
+        use_rama=use_rama,
+        rama_config=rama_config
+    )
+    return model
+
+
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "SwinT"
+    exp_name = "ResNet18"
     exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
@@ -717,7 +835,7 @@ def set_seed(seed):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with SwinT and Gaussian RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with Resnet and Gaussian RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
@@ -781,7 +899,7 @@ def main():
     }
     
     # Create model
-    model = SwinT(
+    model = resnet18(
         num_classes=10, 
         use_rama=args.use_rama,
         rama_config=rama_config

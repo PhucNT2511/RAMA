@@ -139,7 +139,7 @@ class EfficientNet(nn.Module):
                 'lambda_value': 1.0,
                 'sqrt_dim': False,
             }
-            
+
         self.backbone = efficientnet_b2(weights=None)
         self.feature_dim = self.backbone.classifier[1].in_features
 
@@ -704,18 +704,21 @@ class Trainer:
 
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "EfficientNet-B2"
+    exp_name = "EfficientNet_B2"
     exp_name += "_BernoulliRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
         exp_name += f"_{args.bernoulli_values}"  # Add Bernoulli value type (0/1 or -1/1)
         exp_name += "_norm" if args.use_normalization else "_nonorm"
+        exp_name += "_sqrt_d_True" if args.use_normalization else "_sqrt_d_False"
         exp_name += f"_{args.activation}"
         
     exp_name += f"_lr{args.lr}_epochs{args.epochs}_bs{args.batch_size}"
     
     if args.use_rama:
         exp_name += f"_p{args.p_value:.2f}"
+        exp_name += f"_lambda{args.lambda_value:.2f}"
+
     return exp_name
 
 
