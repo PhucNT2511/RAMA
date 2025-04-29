@@ -682,7 +682,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     if args.use_rama:
         exp_name += "_norm" if args.use_normalization else "_nonorm"
         exp_name += f"_{args.activation}"
-        exp_name += "_sqrt_d" if args.sqrt_dim else "_sqrt_1"
+        exp_name += "_sqrt_d_True" if args.sqrt_dim else "_sqrt_d_False"
 
         
     exp_name += f"_lr{args.lr}_epochs{args.epochs}_bs{args.batch_size}"
