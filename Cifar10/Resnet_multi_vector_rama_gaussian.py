@@ -857,7 +857,7 @@ def parse_args():
                         help='activation function for RAMA layers')
     
     # Bayesian optimization parameters - adjusted for probability range
-    parser.add_argument('--lambda-min', default=0.1, type=float, help='minimum Lambda value for optimization')
+    parser.add_argument('--lambda-min', default=0.001, type=float, help='minimum Lambda value for optimization')
     parser.add_argument('--lambda-max', default=1, type=float, help='maximum Lambda value for optimization')
     parser.add_argument('--bayes-init-points', default=5, type=int, help='number of initial points for Bayesian optimization')
     parser.add_argument('--bayes-n-iter', default=15, type=int, help='number of iterations for Bayesian optimization')
