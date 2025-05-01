@@ -207,68 +207,51 @@ class DataManager:
         num_workers (int): Number of workers for data loading. Default: 2.
     """
     def __init__(self, batch_size, num_workers=2):
-        self.batch_size = batch_size
+        self.batch_size  = batch_size
         self.num_workers = num_workers
-
-        # Standard ImageNet transforms for Tiny ImageNet (64x64)
         self.transform_train = transforms.Compose([
             transforms.RandomCrop(64, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
+            transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
         ])
-
         self.transform_valid = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
+            transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
         ])
 
     def get_loaders(self):
-        """
-        Returns:
-            train_loader, valid_loader (torch.utils.data.DataLoader)
-        """
         ds = load_dataset("zh-plus/tiny-imagenet")
-        train_ds = ds["train"]
-        valid_ds = ds["valid"]
+        train_ds, valid_ds = ds["train"], ds["valid"]
 
-        def _transform_train(example):
-            return {
-                "pixel_values": self.transform_train(example["image"]),
-                "labels": example["label"]
-            }
+        # map để thêm pixel_values & labels, xóa image/label
+        train_ds = train_ds.map(
+            lambda ex: {
+                "pixel_values": self.transform_train(ex["image"]),
+                "labels":       ex["label"]
+            },
+            remove_columns=["image", "label"]
+        )
+        valid_ds = valid_ds.map(
+            lambda ex: {
+                "pixel_values": self.transform_valid(ex["image"]),
+                "labels":       ex["label"]
+            },
+            remove_columns=["image", "label"]
+        )
 
-        def _transform_valid(example):
-            return {
-                "pixel_values": self.transform_valid(example["image"]),
-                "labels": example["label"]
-            }
-
-        train_ds = train_ds.with_transform(_transform_train)
-        valid_ds = valid_ds.with_transform(_transform_valid)
-
+        # set_format trên cột mới
         train_ds.set_format(type="torch", columns=["pixel_values", "labels"])
         valid_ds.set_format(type="torch", columns=["pixel_values", "labels"])
 
         train_loader = torch.utils.data.DataLoader(
-            train_ds,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers
+            train_ds, batch_size=self.batch_size,
+            shuffle=True, num_workers=self.num_workers
         )
         valid_loader = torch.utils.data.DataLoader(
-            valid_ds,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers
+            valid_ds, batch_size=self.batch_size,
+            shuffle=False, num_workers=self.num_workers
         )
-
         return train_loader, valid_loader
 
 
