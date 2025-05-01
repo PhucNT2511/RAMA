@@ -298,48 +298,64 @@ class ResNet(nn.Module):
             return outputs, None, None
 
 class DataManager:
+    """
+    Manager for Tiny ImageNet (zh-plus/tiny-imagenet) via Hugging Face Datasets.
+    """
     def __init__(self, batch_size, num_workers=2):
-        self.batch_size  = batch_size
+        self.batch_size = batch_size
         self.num_workers = num_workers
 
+        # Transforms cho train và valid
         self.transform_train = transforms.Compose([
             transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
             transforms.RandomCrop(64, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std =[0.229, 0.224, 0.225])
+                                 std=[0.229, 0.224, 0.225])
         ])
         self.transform_valid = transforms.Compose([
             transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std =[0.229, 0.224, 0.225])
+                                 std=[0.229, 0.224, 0.225])
         ])
 
     def get_loaders(self):
+        # 1) Load dataset
         ds = load_dataset("zh-plus/tiny-imagenet")
         train_ds, valid_ds = ds["train"], ds["valid"]
 
-        train_ds = train_ds.map(lambda ex: {
-            "image": self.transform_train(ex["image"]),
-            "label": ex["label"]
-        })
-        valid_ds = valid_ds.map(lambda ex: {
-            "image": self.transform_valid(ex["image"]),
-            "label": ex["label"]
-        })
+        # 2) Nếu nhãn là string (wnid), ánh xạ sang số nguyên
+        label_feature = train_ds.features["label"]
+        if hasattr(label_feature, 'names'):
+            # label_feature.names is list of str->int mapping
+            class2idx = {name: idx for idx, name in enumerate(label_feature.names)}
+        else:
+            class2idx = None
 
+        # 3) map per-sample transform bao gồm convert to RGB và label mapping
+        def preprocess(ex):
+            img = ex["image"]
+            img = self.transform_train(img) if ex.get('_split', 'train') == 'train' else self.transform_valid(img)
+            lbl = ex["label"]
+            if class2idx is not None and isinstance(lbl, str):
+                lbl = class2idx[lbl]
+            return {"image": img, "label": lbl}
+
+        train_ds = train_ds.map(preprocess, batched=False)
+        valid_ds = valid_ds.map(preprocess, batched=False)
+
+        # 4) set_format to torch tensors
         train_ds.set_format(type="torch", columns=["image", "label"])
         valid_ds.set_format(type="torch", columns=["image", "label"])
 
+        # 5) DataLoader
         train_loader = torch.utils.data.DataLoader(
-            train_ds, batch_size=self.batch_size, shuffle=True,
-            num_workers=self.num_workers
+            train_ds, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers
         )
         valid_loader = torch.utils.data.DataLoader(
-            valid_ds, batch_size=self.batch_size, shuffle=False,
-            num_workers=self.num_workers
+            valid_ds, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers
         )
 
         return train_loader, valid_loader
