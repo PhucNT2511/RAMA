@@ -302,25 +302,21 @@ class DataManager:
         ds = load_dataset("zh-plus/tiny-imagenet")
         train_ds, valid_ds = ds["train"], ds["valid"]
 
-        # 2) Áp transforms on-the-fly, giữ cột 'image' và 'label'
+        # 2) with_transform trả về tuple (image_tensor, label)
         train_ds = train_ds.with_transform(
-            lambda ex: {
-                "image": self.transform_train(ex["image"]),
-                "label": ex["label"]
-            }
+            lambda ex: (
+                self.transform_train(ex["image"]),
+                ex["label"]
+            )
         )
         valid_ds = valid_ds.with_transform(
-            lambda ex: {
-                "image": self.transform_valid(ex["image"]),
-                "label": ex["label"]
-            }
+            lambda ex: (
+                self.transform_valid(ex["image"]),
+                ex["label"]
+            )
         )
 
-        # 3) Chuyển sang PyTorch tensors
-        train_ds.set_format(type="torch", columns=["image", "label"])
-        valid_ds.set_format(type="torch", columns=["image", "label"])
-
-        # 4) Tạo DataLoader
+        # 3) DataLoader sẽ tự collate tuple of tensors/int -> (Tensor[bs,3,64,64], Tensor[bs])
         train_loader = torch.utils.data.DataLoader(
             train_ds,
             batch_size=self.batch_size,
