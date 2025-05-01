@@ -456,6 +456,7 @@ class Trainer:
         total = 0
         pbar = tqdm(self.trainloader, desc="Training")
         for batch_idx, (inputs, targets) in enumerate(pbar):
+            print(type(inputs), type(targets))
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             self.optimizer.zero_grad()
             outputs = self.model.forward(inputs, p_value=p_value)
