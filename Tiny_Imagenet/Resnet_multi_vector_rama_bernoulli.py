@@ -326,31 +326,38 @@ class DataManager:
         ds = load_dataset("zh-plus/tiny-imagenet")
         train_ds, valid_ds = ds["train"], ds["valid"]
 
-        # 2) Nếu nhãn là string (wnid), ánh xạ sang số nguyên
+        # 2) Nếu nhãn là string, ánh xạ sang số nguyên
         label_feature = train_ds.features["label"]
+        class2idx = None
         if hasattr(label_feature, 'names'):
-            # label_feature.names is list of str->int mapping
             class2idx = {name: idx for idx, name in enumerate(label_feature.names)}
-        else:
-            class2idx = None
 
-        # 3) map per-sample transform bao gồm convert to RGB và label mapping
-        def preprocess(ex):
+        # 3) preprocess per-sample cho train
+        def preprocess_train(ex):
             img = ex["image"]
-            img = self.transform_train(img) if ex.get('_split', 'train') == 'train' else self.transform_valid(img)
+            img = self.transform_train(img)
             lbl = ex["label"]
-            if class2idx is not None and isinstance(lbl, str):
+            if class2idx and isinstance(lbl, str):
                 lbl = class2idx[lbl]
             return {"image": img, "label": lbl}
 
-        train_ds = train_ds.map(preprocess, batched=False)
-        valid_ds = valid_ds.map(preprocess, batched=False)
+        # 4) preprocess per-sample cho valid
+        def preprocess_valid(ex):
+            img = ex["image"]
+            img = self.transform_valid(img)
+            lbl = ex["label"]
+            if class2idx and isinstance(lbl, str):
+                lbl = class2idx[lbl]
+            return {"image": img, "label": lbl}
 
-        # 4) set_format to torch tensors
+        train_ds = train_ds.map(preprocess_train, batched=False)
+        valid_ds = valid_ds.map(preprocess_valid, batched=False)
+
+        # 5) Chuyển sang tensor cho PyTorch
         train_ds.set_format(type="torch", columns=["image", "label"])
         valid_ds.set_format(type="torch", columns=["image", "label"])
 
-        # 5) DataLoader
+        # 6) Tạo DataLoader
         train_loader = torch.utils.data.DataLoader(
             train_ds, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers
         )
@@ -359,6 +366,7 @@ class DataManager:
         )
 
         return train_loader, valid_loader
+
 
 
 
