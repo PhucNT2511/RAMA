@@ -324,6 +324,10 @@ class DataManager:
         ds = load_dataset("zh-plus/tiny-imagenet")
         train_ds, valid_ds = ds["train"], ds["valid"]
 
+        img = ds["train"][0]["image"]
+        print(img.mode)  # phải in ra "RGB"
+
+
         # map để thêm pixel_values & labels, xóa image/label
         train_ds = train_ds.map(
             lambda ex: {
