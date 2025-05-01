@@ -710,7 +710,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     
     if args.use_rama:
         exp_name += f"_p{args.p_value:.2f}"
-        exp_name += f"_lambda{args.lambda_value:.2f}"
+        exp_name += f"_lambda{args.lambda_value:.4f}"
 
     return exp_name
 

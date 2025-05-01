@@ -13,6 +13,7 @@ import torch.optim as optim
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
+from torchvision.models import swin_t
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
@@ -115,41 +116,9 @@ class BernoulliRAMALayer(nn.Module):
         return out
 
 
-class ResidualBlock(nn.Module):
+class SwinT(nn.Module):
     """
-    Residual block with skip connection for ResNet architecture.
-    
-    Args:
-        in_channels (int): Number of input channels.
-        out_channels (int): Number of output channels.
-        stride (int): Stride for convolution. Default: 1.
-    """
-    def __init__(self, in_channels, out_channels, stride=1):
-        super(ResidualBlock, self).__init__()
-        self.conv_block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels)
-        )
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_channels != out_channels:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_channels)
-            )
-            
-    def forward(self, x):
-        out = self.conv_block(x)
-        out += self.shortcut(x)
-        out = F.relu(out)
-        return out
-
-
-class ResNet(nn.Module):
-    """
-    Modified ResNet architecture with Bernoulli RAMA layers at multiple positions.
+    Modified SwinT architecture with Bernoulli RAMA layers at multiple positions.
     
     Args:
         block (nn.Module): Block type to use for the network.
@@ -158,9 +127,9 @@ class ResNet(nn.Module):
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
     """
-    def __init__(self, block, num_blocks, num_classes=10, use_rama=False, rama_config=None):
-        super(ResNet, self).__init__()
-        self.in_channels = 64
+    def __init__(self, num_classes=10, use_rama=False, rama_config=None):
+        super().__init__()
+        
         self.use_rama = use_rama
         
         if rama_config is None:
@@ -173,48 +142,14 @@ class ResNet(nn.Module):
                 'sqrt_dim': False,
             }
             
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU()
-        )
+        self.backbone = swin_t(weights=None)
+        self.feature_dim = self.backbone.head.in_features
+
+        self.features = nn.Sequential(*list(self.backbone.children())[:-1]) 
         
-        # Create standard ResNet blocks
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
-        
-        self.feature_dim = 512
-        
-        # Create Bernoulli RAMA layers for different positions in the network
+        # Create Bernoulli RAMA layer before the linear layer in the network
         if use_rama:
-            # RAMA after layer2 (128 features)
-            self.rama_layer2 = BernoulliRAMALayer(
-                128, 
-                128, 
-                rama_config['p_value'], 
-                rama_config.get('values', '0_1'),
-                rama_config.get('use_normalization', True),
-                rama_config.get('activation', 'relu'),
-                rama_config.get('lambda_value', 1.0),
-                rama_config.get('sqrt_dim', False),
-            )
-            
-            # RAMA after layer3 (256 features)
-            self.rama_layer3 = BernoulliRAMALayer(
-                256, 
-                256, 
-                rama_config['p_value'], 
-                rama_config.get('values', '0_1'),
-                rama_config.get('use_normalization', True),
-                rama_config.get('activation', 'relu'),
-                rama_config.get('lambda_value', 1.0),
-                rama_config.get('sqrt_dim', False),
-            )
-            
-            # RAMA before final classification
-            self.rama_layer4 = BernoulliRAMALayer(
+            self.rama_linearLayer = BernoulliRAMALayer(
                 self.feature_dim, 
                 self.feature_dim, 
                 rama_config['p_value'], 
@@ -224,7 +159,7 @@ class ResNet(nn.Module):
                 rama_config.get('lambda_value', 1.0),
                 rama_config.get('sqrt_dim', False),
             )
-            
+
         self.fc = nn.Linear(self.feature_dim, num_classes)
         
         # Initialize hooks for feature extraction
@@ -232,56 +167,21 @@ class ResNet(nn.Module):
         self.before_rama_features = None
         self.after_rama_features = None
 
-    def _make_layer(self, block, out_channels, num_blocks, stride):
-        """Create a ResNet layer with the specified number of blocks."""
-        strides = [stride] + [1] * (num_blocks - 1)
-        layers = []
-        for stride in strides:
-            layers.append(block(self.in_channels, out_channels, stride))
-            self.in_channels = out_channels
-        return nn.Sequential(*layers)
-
     def forward(self, x, p_value):
-        """Forward pass through the ResNet model with Bernoulli RAMA layers."""
-        out = self.conv1(x)
-        out = self.layer1(out)
-        
-        # After layer 1
-        out = self.layer2(out)
-        
-        # # Apply RAMA after layer2 (early in the network)
-        # if self.use_rama:
-        #     # Need to flatten, apply RAMA, then reshape back
-        #     batch_size, channels, h, w = out.shape
-        #     out_flat = out.view(batch_size, channels, -1).mean(dim=2)  # Global avg pooling per channel
-        #     out_flat = self.rama_layer2(out_flat, p_value)
-        #     # Broadcast back to spatial dimensions
-        #     out = out * out_flat.view(batch_size, channels, 1, 1)
+        """Forward pass through the Swin_T model with Bernoulli RAMA layers."""
+        out = self.features(x)
 
-        out = self.layer3(out)
-        
-        # # Apply RAMA after layer3 (middle of the network)
-        # if self.use_rama:
-        #     batch_size, channels, h, w = out.shape
-        #     out_flat = out.view(batch_size, channels, -1).mean(dim=2)
-        #     out_flat = self.rama_layer3(out_flat, p_value)
-        #     out = out * out_flat.view(batch_size, channels, 1, 1)
-            
-        out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
-        out = out.view(out.size(0), -1)
-        
         # Store features before RAMA for evaluation
         if self.use_rama:
             self.before_rama_features = out.detach().clone()
             
         # Apply RAMA before final classification (original position)
         if self.use_rama:
-            out = self.rama_layer4(out, p_value)
-            # out = self.rama_layer4(out, None)
-            # Store features after RAMA for evaluation
+            out = self.rama_linearLayer(out, p_value)
             self.after_rama_features = out.detach().clone()
+            
         out = self.fc(out)
+        
         return out
 
     def forward_with_features(self, x, p_value):
@@ -298,7 +198,7 @@ class ResNet(nn.Module):
 
 class DataManager:
     """
-    Manager for CIFAR-10 dataset preparation and loading.
+    Manager for CIFAR-100 dataset preparation and loading.
     
     Args:
         data_dir (str): Directory to store/load dataset.
@@ -313,12 +213,14 @@ class DataManager:
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize((0.5071, 0.4865, 0.4409), 
+                                 (0.2673, 0.2564, 0.2762))
         ])
         
         self.transform_test = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize((0.5071, 0.4865, 0.4409), 
+                                 (0.2673, 0.2564, 0.2762))
         ])
         
     def get_loaders(self):
@@ -328,8 +230,7 @@ class DataManager:
         Returns:
             tuple: (train_loader, test_loader)
         """
-        # Training dataset.
-        trainset = torchvision.datasets.CIFAR10(
+        trainset = torchvision.datasets.CIFAR100(
             root=self.data_dir, 
             train=True, 
             download=True, 
@@ -342,8 +243,7 @@ class DataManager:
             num_workers=self.num_workers
         )
 
-        # Testing dataset.
-        testset = torchvision.datasets.CIFAR10(
+        testset = torchvision.datasets.CIFAR100(
             root=self.data_dir, 
             train=False, 
             download=True, 
@@ -372,7 +272,6 @@ class Trainer:
         checkpoint_dir (str): Directory to save checkpoints.
         bayes_opt_config (dict): Configuration for Bayesian optimization.
         neptune_run: Neptune.ai run instance
-        use_hyperparameter_optimization: bool = False ---> TURN ON when you want optimize p value, else OFF
     """
     def __init__(self, model, trainloader, testloader, criterion, optimizer, 
                  device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
@@ -796,32 +695,9 @@ class Trainer:
         logger.info(f"Best test accuracy: {self.best_acc:.2f}%")
         return self.best_acc
 
-
-def resnet18(num_classes=10, use_rama=False, rama_config=None):
-    """
-    Create a ResNet-18 model with optional Bernoulli RAMA layers.
-    
-    Args:
-        num_classes (int): Number of output classes. Default: 10.
-        use_rama (bool): Whether to use RAMA layers. Default: False.
-        rama_config (dict): Configuration for RAMA layers. Default: None.
-        
-    Returns:
-        ResNet: ResNet-18 model.
-    """
-    model = ResNet(
-        ResidualBlock, 
-        [2, 2, 2, 2], 
-        num_classes=num_classes,
-        use_rama=use_rama,
-        rama_config=rama_config
-    )
-    return model
-
-
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "ResNet18"
+    exp_name = "SwinT"
     exp_name += "_BernoulliRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
@@ -869,7 +745,7 @@ def set_seed(seed):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with ResNet-18 and Bernoulli RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR-100 Training with SwinT and Bernoulli RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
@@ -938,7 +814,7 @@ def main():
     }
     
     # Create model
-    model = resnet18(
+    model = SwinT(
         num_classes=10, 
         use_rama=args.use_rama,
         rama_config=rama_config

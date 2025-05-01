@@ -17,6 +17,8 @@ from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
 
+from datasets import load_dataset
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -298,64 +300,76 @@ class ResNet(nn.Module):
 
 class DataManager:
     """
-    Manager for CIFAR-10 dataset preparation and loading.
+    Manager for Tiny ImageNet (zh-plus/tiny-imagenet) via Hugging Face Datasets.
     
     Args:
-        data_dir (str): Directory to store/load dataset.
         batch_size (int): Batch size for data loaders.
         num_workers (int): Number of workers for data loading. Default: 2.
     """
-    def __init__(self, data_dir, batch_size, num_workers=2):
-        self.data_dir = data_dir
+    def __init__(self, batch_size, num_workers=2):
         self.batch_size = batch_size
         self.num_workers = num_workers
+
+        # Standard ImageNet transforms for Tiny ImageNet (64x64)
         self.transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(64, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            )
         ])
-        
-        self.transform_test = transforms.Compose([
+
+        self.transform_valid = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            )
         ])
-        
+
     def get_loaders(self):
         """
-        Get data loaders for training and testing.
-        
         Returns:
-            tuple: (train_loader, test_loader)
+            train_loader, valid_loader (torch.utils.data.DataLoader)
         """
-        # Training dataset.
-        trainset = torchvision.datasets.CIFAR10(
-            root=self.data_dir, 
-            train=True, 
-            download=True, 
-            transform=self.transform_train
+        ds = load_dataset("zh-plus/tiny-imagenet")
+        train_ds = ds["train"]
+        valid_ds = ds["valid"]
+
+        def _transform_train(example):
+            return {
+                "pixel_values": self.transform_train(example["image"]),
+                "labels": example["label"]
+            }
+
+        def _transform_valid(example):
+            return {
+                "pixel_values": self.transform_valid(example["image"]),
+                "labels": example["label"]
+            }
+
+        train_ds = train_ds.with_transform(_transform_train)
+        valid_ds = valid_ds.with_transform(_transform_valid)
+
+        train_ds.set_format(type="torch", columns=["pixel_values", "labels"])
+        valid_ds.set_format(type="torch", columns=["pixel_values", "labels"])
+
+        train_loader = torch.utils.data.DataLoader(
+            train_ds,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers
         )
-        trainloader = torch.utils.data.DataLoader(
-            trainset, 
-            batch_size=self.batch_size, 
-            shuffle=True, 
+        valid_loader = torch.utils.data.DataLoader(
+            valid_ds,
+            batch_size=self.batch_size,
+            shuffle=False,
             num_workers=self.num_workers
         )
 
-        # Testing dataset.
-        testset = torchvision.datasets.CIFAR10(
-            root=self.data_dir, 
-            train=False, 
-            download=True, 
-            transform=self.transform_test
-        )
-        testloader = torch.utils.data.DataLoader(
-            testset, 
-            batch_size=self.batch_size, 
-            shuffle=False, 
-            num_workers=self.num_workers
-        )
-        return trainloader, testloader
+        return train_loader, valid_loader
 
 
 class Trainer:
@@ -869,7 +883,7 @@ def set_seed(seed):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with ResNet-18 and Bernoulli RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch Tiny ImageNet Training with ResNet-18 and Bernoulli RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')

@@ -298,7 +298,7 @@ class ResNet(nn.Module):
 
 class DataManager:
     """
-    Manager for CIFAR-10 dataset preparation and loading.
+    Manager for CIFAR-100 dataset preparation and loading.
     
     Args:
         data_dir (str): Directory to store/load dataset.
@@ -313,12 +313,14 @@ class DataManager:
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize((0.5071, 0.4865, 0.4409), 
+                                 (0.2673, 0.2564, 0.2762))
         ])
         
         self.transform_test = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize((0.5071, 0.4865, 0.4409), 
+                                 (0.2673, 0.2564, 0.2762))
         ])
         
     def get_loaders(self):
@@ -328,8 +330,7 @@ class DataManager:
         Returns:
             tuple: (train_loader, test_loader)
         """
-        # Training dataset.
-        trainset = torchvision.datasets.CIFAR10(
+        trainset = torchvision.datasets.CIFAR100(
             root=self.data_dir, 
             train=True, 
             download=True, 
@@ -342,8 +343,7 @@ class DataManager:
             num_workers=self.num_workers
         )
 
-        # Testing dataset.
-        testset = torchvision.datasets.CIFAR10(
+        testset = torchvision.datasets.CIFAR100(
             root=self.data_dir, 
             train=False, 
             download=True, 
@@ -869,7 +869,7 @@ def set_seed(seed):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with ResNet-18 and Bernoulli RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR-100 Training with ResNet-18 and Bernoulli RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
