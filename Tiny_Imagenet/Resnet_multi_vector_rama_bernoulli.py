@@ -182,7 +182,7 @@ class ResNet(nn.Module):
         )
         
         # Create standard ResNet blocks
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1) 
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
@@ -236,7 +236,7 @@ class ResNet(nn.Module):
 
     def _make_layer(self, block, out_channels, num_blocks, stride):
         """Create a ResNet layer with the specified number of blocks."""
-        strides = [stride] + [1] * (num_blocks - 1)
+        strides = [stride] + [1] * (num_blocks - 1) # [2] + [1] * (2-1) = [2] + [1] = [2,1]
         layers = []
         for stride in strides:
             layers.append(block(self.in_channels, out_channels, stride))
@@ -245,11 +245,11 @@ class ResNet(nn.Module):
 
     def forward(self, x, p_value):
         """Forward pass through the ResNet model with Bernoulli RAMA layers."""
-        out = self.conv1(x)
-        out = self.layer1(out)
+        out = self.conv1(x) #(B,64,64,64)
+        out = self.layer1(out) #(B,64,64,64)
         
         # After layer 1
-        out = self.layer2(out)
+        out = self.layer2(out) #(B,128,32,32)
         
         # # Apply RAMA after layer2 (early in the network)
         # if self.use_rama:
@@ -260,7 +260,7 @@ class ResNet(nn.Module):
         #     # Broadcast back to spatial dimensions
         #     out = out * out_flat.view(batch_size, channels, 1, 1)
 
-        out = self.layer3(out)
+        out = self.layer3(out) #(B,256,16,16)
         
         # # Apply RAMA after layer3 (middle of the network)
         # if self.use_rama:
@@ -269,8 +269,8 @@ class ResNet(nn.Module):
         #     out_flat = self.rama_layer3(out_flat, p_value)
         #     out = out * out_flat.view(batch_size, channels, 1, 1)
             
-        out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
+        out = self.layer4(out) #(B,512,8,8)
+        out = F.avg_pool2d(out, 8)
         out = out.view(out.size(0), -1)
         
         # Store features before RAMA for evaluation
