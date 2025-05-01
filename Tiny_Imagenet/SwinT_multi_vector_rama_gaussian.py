@@ -103,11 +103,11 @@ class SwinT(nn.Module):
     Args:
         block (nn.Module): Block type to use for the network.
         num_blocks (List[int]): Number of blocks in each layer.
-        num_classes (int): Number of output classes. Default: 10.
+        num_classes (int): Number of output classes. Default: 200.
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
     """
-    def __init__(self, num_classes=10, use_rama=False, rama_config=None):
+    def __init__(self, num_classes=200, use_rama=False, rama_config=None):
         super().__init__()
         
         self.use_rama = use_rama
@@ -754,7 +754,7 @@ def parse_args():
     
     # Bayesian optimization parameters - adjusted for probability range
     parser.add_argument('--lambda-min', default=0.001, type=float, help='minimum Lambda value for optimization')
-    parser.add_argument('--lambda-max', default=1, type=float, help='maximum Lambda value for optimization')
+    parser.add_argument('--lambda-max', default=10, type=float, help='maximum Lambda value for optimization')
     parser.add_argument('--bayes-init-points', default=5, type=int, help='number of initial points for Bayesian optimization')
     parser.add_argument('--bayes-n-iter', default=15, type=int, help='number of iterations for Bayesian optimization')
     parser.add_argument('--bayes-acq', default="ei", choices=["ucb", "ei", "poi"], help='acquisition function for Bayesian optimization')
@@ -796,7 +796,7 @@ def main():
     
     # Create model
     model = SwinT(
-        num_classes=10, 
+        num_classes=200, 
         use_rama=args.use_rama,
         rama_config=rama_config
     ).to(device)

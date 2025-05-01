@@ -154,11 +154,11 @@ class ResNet(nn.Module):
     Args:
         block (nn.Module): Block type to use for the network.
         num_blocks (List[int]): Number of blocks in each layer.
-        num_classes (int): Number of output classes. Default: 10.
+        num_classes (int): Number of output classes. Default: 100.
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
     """
-    def __init__(self, block, num_blocks, num_classes=10, use_rama=False, rama_config=None):
+    def __init__(self, block, num_blocks, num_classes=100, use_rama=False, rama_config=None):
         super(ResNet, self).__init__()
         self.in_channels = 64
         self.use_rama = use_rama
@@ -797,12 +797,12 @@ class Trainer:
         return self.best_acc
 
 
-def resnet18(num_classes=10, use_rama=False, rama_config=None):
+def resnet18(num_classes=100, use_rama=False, rama_config=None):
     """
     Create a ResNet-18 model with optional Bernoulli RAMA layers.
     
     Args:
-        num_classes (int): Number of output classes. Default: 10.
+        num_classes (int): Number of output classes. Default: 100.
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
         
@@ -939,7 +939,7 @@ def main():
     
     # Create model
     model = resnet18(
-        num_classes=10, 
+        num_classes=100, 
         use_rama=args.use_rama,
         rama_config=rama_config
     ).to(device)

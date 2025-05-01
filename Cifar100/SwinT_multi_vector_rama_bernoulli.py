@@ -123,11 +123,11 @@ class SwinT(nn.Module):
     Args:
         block (nn.Module): Block type to use for the network.
         num_blocks (List[int]): Number of blocks in each layer.
-        num_classes (int): Number of output classes. Default: 10.
+        num_classes (int): Number of output classes. Default: 100.
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
     """
-    def __init__(self, num_classes=10, use_rama=False, rama_config=None):
+    def __init__(self, num_classes=100, use_rama=False, rama_config=None):
         super().__init__()
         
         self.use_rama = use_rama
@@ -815,7 +815,7 @@ def main():
     
     # Create model
     model = SwinT(
-        num_classes=10, 
+        num_classes=100, 
         use_rama=args.use_rama,
         rama_config=rama_config
     ).to(device)

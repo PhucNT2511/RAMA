@@ -124,11 +124,11 @@ class EfficientNet(nn.Module):
     Modified EfficientNet-B2 architecture with Bernoulli RAMA layers at multiple positions.
     
     Args:
-        num_classes (int): Number of output classes. Default: 10.
+        num_classes (int): Number of output classes. Default: 200.
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
     """
-    def __init__(self, num_classes=10, use_rama=False, rama_config=None):
+    def __init__(self, num_classes=200, use_rama=False, rama_config=None):
         super().__init__()
         
         self.use_rama = use_rama
@@ -837,7 +837,7 @@ def main():
     
     # Create model
     model = EfficientNet(
-        num_classes=10, 
+        num_classes=200, 
         use_rama=args.use_rama,
         rama_config=rama_config
     ).to(device)
