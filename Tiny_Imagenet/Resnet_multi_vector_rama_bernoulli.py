@@ -298,65 +298,52 @@ class ResNet(nn.Module):
             return outputs, None, None
 
 class DataManager:
-    """
-    Manager for Tiny ImageNet (zh-plus/tiny-imagenet) via Hugging Face Datasets.
-    """
     def __init__(self, batch_size, num_workers=2):
         self.batch_size  = batch_size
         self.num_workers = num_workers
 
-        # Các transform cho train và valid
         self.transform_train = transforms.Compose([
+            transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
             transforms.RandomCrop(64, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std =[0.229, 0.224, 0.225]
-            )
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std =[0.229, 0.224, 0.225])
         ])
         self.transform_valid = transforms.Compose([
+            transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std =[0.229, 0.224, 0.225]
-            )
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std =[0.229, 0.224, 0.225])
         ])
 
     def get_loaders(self):
-        # 1) Load dataset
         ds = load_dataset("zh-plus/tiny-imagenet")
         train_ds, valid_ds = ds["train"], ds["valid"]
 
-        # 2) with_transform: batch["image"] là list các PIL.Image → iterate từng ảnh
-        train_ds = train_ds.with_transform(
-            lambda batch: (
-                [self.transform_train(img) for img in batch["image"]],
-                batch["label"]
-            )
-        )
-        valid_ds = valid_ds.with_transform(
-            lambda batch: (
-                [self.transform_valid(img) for img in batch["image"]],
-                batch["label"]
-            )
-        )
+        train_ds = train_ds.map(lambda ex: {
+            "image": self.transform_train(ex["image"]),
+            "label": ex["label"]
+        })
+        valid_ds = valid_ds.map(lambda ex: {
+            "image": self.transform_valid(ex["image"]),
+            "label": ex["label"]
+        })
 
-        # 3) Tạo DataLoader (default collate sẽ stack list of tensors)
+        train_ds.set_format(type="torch", columns=["image", "label"])
+        valid_ds.set_format(type="torch", columns=["image", "label"])
+
         train_loader = torch.utils.data.DataLoader(
-            train_ds,
-            batch_size=self.batch_size,
-            shuffle=True,
+            train_ds, batch_size=self.batch_size, shuffle=True,
             num_workers=self.num_workers
         )
         valid_loader = torch.utils.data.DataLoader(
-            valid_ds,
-            batch_size=self.batch_size,
-            shuffle=False,
+            valid_ds, batch_size=self.batch_size, shuffle=False,
             num_workers=self.num_workers
         )
 
         return train_loader, valid_loader
+
 
 
 
