@@ -822,7 +822,7 @@ def main():
     logger.info(f"Using device: {device}")
     
     # Prepare data
-    data_manager = DataManager(args.data_dir, args.batch_size, args.num_workers)
+    data_manager = DataManager(args.batch_size, args.num_workers)
     trainloader, testloader = data_manager.get_loaders()
     
     # Bernoulli RAMA configuration
