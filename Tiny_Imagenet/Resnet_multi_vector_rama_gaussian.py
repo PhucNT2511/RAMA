@@ -16,7 +16,7 @@ import torchvision.transforms as transforms
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
-
+from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 
 logging.basicConfig(
@@ -239,7 +239,7 @@ class ResNet(nn.Module):
         #     out = out * out_flat.view(batch_size, channels, 1, 1)
             
         out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
+        out = F.avg_pool2d(out, 8)
         out = out.view(out.size(0), -1)
         
         # Store features before RAMA for evaluation
@@ -266,69 +266,57 @@ class ResNet(nn.Module):
         else:
             return outputs, None, None
 
+class TinyImageNetDataset(Dataset):
+    def __init__(self, split, transform=None):
+        ds = load_dataset("zh-plus/tiny-imagenet", split=split)
+        self.images = ds["image"]
+        self.labels = ds["label"]
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        img = self.images[idx]
+
+        if self.transform:
+            img = self.transform(img)
+
+        label = self.labels[idx]
+        return img, label
 
 class DataManager:
     """
     Manager for Tiny ImageNet (zh-plus/tiny-imagenet) via Hugging Face Datasets.
-
-    Args:
-        batch_size (int): Batch size for data loaders.
-        num_workers (int): Number of workers for data loading. Default: 2.
     """
     def __init__(self, batch_size, num_workers=2):
-        self.batch_size  = batch_size
+        self.batch_size = batch_size
         self.num_workers = num_workers
 
-        # Transforms cho train/valid (ảnh đã là RGB)
         self.transform_train = transforms.Compose([
+            transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
             transforms.RandomCrop(64, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std =[0.229, 0.224, 0.225]
-            )
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
         ])
+
         self.transform_valid = transforms.Compose([
+            transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std =[0.229, 0.224, 0.225]
-            )
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
         ])
 
     def get_loaders(self):
-        # 1) Load dataset splits
-        ds = load_dataset("zh-plus/tiny-imagenet")
-        train_ds, valid_ds = ds["train"], ds["valid"]
+        train_set = TinyImageNetDataset(split="train", transform=self.transform_train)
+        valid_set = TinyImageNetDataset(split="valid", transform=self.transform_valid)
 
-        # 2) with_transform trả về tuple (image_tensor, label)
-        train_ds = train_ds.with_transform(
-            lambda ex: (
-                self.transform_train(ex["image"]),
-                ex["label"]
-            )
-        )
-        valid_ds = valid_ds.with_transform(
-            lambda ex: (
-                self.transform_valid(ex["image"]),
-                ex["label"]
-            )
-        )
-
-        # 3) DataLoader sẽ tự collate tuple of tensors/int -> (Tensor[bs,3,64,64], Tensor[bs])
-        train_loader = torch.utils.data.DataLoader(
-            train_ds,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers
-        )
-        valid_loader = torch.utils.data.DataLoader(
-            valid_ds,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers
-        )
+        train_loader = DataLoader(train_set, batch_size=self.batch_size,
+                                  shuffle=True, num_workers=self.num_workers)
+        valid_loader = DataLoader(valid_set, batch_size=self.batch_size,
+                                  shuffle=False, num_workers=self.num_workers)
 
         return train_loader, valid_loader
     
