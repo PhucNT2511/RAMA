@@ -180,7 +180,7 @@ class EfficientNet(nn.Module):
 class DataManager:
     """
     Manager for Tiny ImageNet (zh-plus/tiny-imagenet) via Hugging Face Datasets.
-    
+
     Args:
         batch_size (int): Batch size for data loaders.
         num_workers (int): Number of workers for data loading. Default: 2.
@@ -188,49 +188,62 @@ class DataManager:
     def __init__(self, batch_size, num_workers=2):
         self.batch_size  = batch_size
         self.num_workers = num_workers
+
+        # Transforms cho train/valid (ảnh đã là RGB)
         self.transform_train = transforms.Compose([
             transforms.RandomCrop(64, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std =[0.229, 0.224, 0.225]
+            )
         ])
         self.transform_valid = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std =[0.229, 0.224, 0.225]
+            )
         ])
 
     def get_loaders(self):
+        # 1) Load dataset splits
         ds = load_dataset("zh-plus/tiny-imagenet")
         train_ds, valid_ds = ds["train"], ds["valid"]
 
-        # map để thêm pixel_values & labels, xóa image/label
-        train_ds = train_ds.map(
+        # 2) Áp transforms on-the-fly, giữ cột 'image' và 'label'
+        train_ds = train_ds.with_transform(
             lambda ex: {
-                "pixel_values": self.transform_train(ex["image"]),
-                "labels":       ex["label"]
-            },
-            remove_columns=["image", "label"]
+                "image": self.transform_train(ex["image"]),
+                "label": ex["label"]
+            }
         )
-        valid_ds = valid_ds.map(
+        valid_ds = valid_ds.with_transform(
             lambda ex: {
-                "pixel_values": self.transform_valid(ex["image"]),
-                "labels":       ex["label"]
-            },
-            remove_columns=["image", "label"]
+                "image": self.transform_valid(ex["image"]),
+                "label": ex["label"]
+            }
         )
 
-        # set_format trên cột mới
-        train_ds.set_format(type="torch", columns=["pixel_values", "labels"])
-        valid_ds.set_format(type="torch", columns=["pixel_values", "labels"])
+        # 3) Chuyển sang PyTorch tensors
+        train_ds.set_format(type="torch", columns=["image", "label"])
+        valid_ds.set_format(type="torch", columns=["image", "label"])
 
+        # 4) Tạo DataLoader
         train_loader = torch.utils.data.DataLoader(
-            train_ds, batch_size=self.batch_size,
-            shuffle=True, num_workers=self.num_workers
+            train_ds,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers
         )
         valid_loader = torch.utils.data.DataLoader(
-            valid_ds, batch_size=self.batch_size,
-            shuffle=False, num_workers=self.num_workers
+            valid_ds,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers
         )
+
         return train_loader, valid_loader
 
 
