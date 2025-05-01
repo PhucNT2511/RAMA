@@ -29,8 +29,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 MAX_p_value = 10
 MIN_p_value = 1e-3
-NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
-NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
+NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PRJ_NAME")
+NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN")
+
 
 ##### RAMA with Bernoulli for U matrix instead of norm distribution
 class BernoulliRAMALayer(nn.Module):
@@ -54,11 +55,12 @@ class BernoulliRAMALayer(nn.Module):
         self.activation = activation
         self.use_normalization = use_normalization
         self.lambda_value = lambda_value
-
-        self.sqrt_d = 1
+        self.sqrt_dim = sqrt_dim
         if sqrt_dim == True:
             self.sqrt_d = math.sqrt(input_dim)
-        
+        else:
+            self.sqrt_d = 1
+
         # Initialize Bernoulli projection matrix
         # For 0/1 values, we use a threshold of 0.5 initially
         # For -1/1 values, we use a threshold of 0.5 but convert to -1/1
@@ -73,6 +75,19 @@ class BernoulliRAMALayer(nn.Module):
         # Add layer normalization for stabilizing the output distribution.
         if use_normalization:
             self.norm = nn.LayerNorm(output_dim)
+        self.current_mask = None  # For fixed mask per N epochs
+        self.current_p = None
+
+    def update_mask(self, p_value):
+        """Update the fixed mask for the current epoch."""
+        if self.values == '0_1':
+            mask = (torch.rand_like(self.projection) < p_value).float()
+        elif self.values == '-1_1':
+            mask = 2 * (torch.rand_like(self.projection) < p_value).float() - 1
+        else:
+            raise ValueError(f"Unknown values: {self.values}. Use '0_1' or '-1_1'")
+        self.current_mask = mask
+        self.current_p = p_value
 
     def forward(self, x, p_value):
         """
@@ -80,26 +95,24 @@ class BernoulliRAMALayer(nn.Module):
         
         Args:
             x: Input tensor
-            p_value: Value controlling the Bernoulli parameter p
+            p_value: Val  qf÷ue controlling the Bernoulli parameter p
         """
         # Generate a dynamic Bernoulli mask based on p_value
         # For inference or when p_value is None, use the stored projection
         if p_value is not None and self.training:
-            # Clamp p_value between 0.01 and 0.99 to avoid extreme values
-            p = max(0.01, min(0.99, p_value))
-            
-            # Generate a new Bernoulli mask
-            if self.values == '0_1':
-                mask = (torch.rand_like(self.projection) < p).float()
-            elif self.values == '-1_1':
-                mask = 2 * (torch.rand_like(self.projection) < p).float() - 1
-                
-            out = x @ mask
+            # Use the fixed mask if available and p_value matches, else update
+            if self.current_mask is None or self.current_p != p_value:
+                self.update_mask(p_value)
+            out = x @ self.current_mask
         else:
             out = x @ self.projection
 
-        out = out * self.lambda_value * self.sqrt_d
-
+        # Apply correct scaling - multiply by lambda and normalize by sqrt_d if needed
+        out = out * self.lambda_value
+        if self.sqrt_dim:
+            # Correct scaling: multiply by 1/sqrt(d) for stability
+            out = out / self.sqrt_d
+        
         # Apply normalization if specified
         if self.use_normalization:
             out = self.norm(out)
@@ -119,40 +132,34 @@ class BernoulliRAMALayer(nn.Module):
 class SwinT(nn.Module):
     """
     Modified SwinT architecture with Bernoulli RAMA layers at multiple positions.
-    
-    Args:
-        block (nn.Module): Block type to use for the network.
-        num_blocks (List[int]): Number of blocks in each layer.
-        num_classes (int): Number of output classes. Default: 10.
-        use_rama (bool): Whether to use RAMA layers. Default: False.
-        rama_config (dict): Configuration for RAMA layers. Default: None.
     """
     def __init__(self, num_classes=10, use_rama=False, rama_config=None):
         super().__init__()
-        
         self.use_rama = use_rama
-        
+
         if rama_config is None:
             rama_config = {
-                "p_value": 0.5,  # default Bernoulli probability
-                "values": '0_1',      # default to 0/1 values
+                "p_value": 0.5,
+                "values": '0_1',
                 "activation": "leaky_relu",
                 "use_normalization": True,
                 'lambda_value': 1.0,
                 'sqrt_dim': False,
             }
-            
+
+        # Initialize backbone
         self.backbone = swin_t(weights=None)
         self.feature_dim = self.backbone.head.in_features
-
-        self.features = nn.Sequential(*list(self.backbone.children())[:-1]) 
         
-        # Create Bernoulli RAMA layer before the linear layer in the network
+        # Use the backbone features (all layers except the final linear classifier)
+        self.features = nn.Sequential(*list(self.backbone.children())[:-1])
+        
+        # RAMA layer only for the final feature vector (not for intermediate features)
         if use_rama:
-            self.rama_linearLayer = BernoulliRAMALayer(
-                self.feature_dim, 
-                self.feature_dim, 
-                rama_config['p_value'], 
+            self.rama_final = BernoulliRAMALayer(
+                self.feature_dim,  # Input dim is the feature dimension from backbone
+                self.feature_dim,  # Output dim is the same for RAMA
+                rama_config['p_value'],
                 rama_config.get('values', '0_1'),
                 rama_config.get('use_normalization', True),
                 rama_config.get('activation', 'relu'),
@@ -160,35 +167,31 @@ class SwinT(nn.Module):
                 rama_config.get('sqrt_dim', False),
             )
 
+        # Final classification layer
         self.fc = nn.Linear(self.feature_dim, num_classes)
         
-        # Initialize hooks for feature extraction
-        self.hooks = []
+        # For feature analysis
         self.before_rama_features = None
         self.after_rama_features = None
 
     def forward(self, x, p_value):
         """Forward pass through the Swin_T model with Bernoulli RAMA layers."""
+        # Extract features using the backbone (this outputs a tensor with batch_size x feature_dim)
         out = self.features(x)
-
+        
         # Store features before RAMA for evaluation
         if self.use_rama:
             self.before_rama_features = out.detach().clone()
             
-        # Apply RAMA before final classification (original position)
-        if self.use_rama:
-            out = self.rama_linearLayer(out, p_value)
+            # Apply RAMA to the final features
+            out = self.rama_final(out, p_value)
             self.after_rama_features = out.detach().clone()
-            
-        out = self.fc(out)
-        
+
+        # Classification
+        out = self.fc(out)        
         return out
 
     def forward_with_features(self, x, p_value):
-        """
-        Forward pass that returns both output and features before/after RAMA.
-        Useful for analyzing feature quality.
-        """
         outputs = self.forward(x, p_value)
         if self.use_rama:
             return outputs, self.before_rama_features, self.after_rama_features
@@ -611,6 +614,11 @@ class Trainer:
         for epoch in range(start_epoch, epochs):
             logger.info(f"\nEpoch: {epoch+1}/{epochs}")
 
+            # Update RAMA mask every optimize_every epochs (including first epoch)
+            if self.use_rama and hasattr(self.model, "rama_linearLayer"):
+                if epoch % self.bayes_opt_config["optimize_every"] == 0:
+                    self.model.rama_linearLayer.update_mask(self.best_p if self.best_p is not None else self.model.rama_linearLayer.lambda_value)
+
             # Train with best p
             train_loss, train_acc = self.train_one_epoch(p_value=self.best_p)
             
@@ -762,7 +770,7 @@ def parse_args():
     parser.add_argument('--use-hyperparameter-optimization', action='store_true', help='whether to use Bayesian optimization for p-value')
     parser.add_argument('--p-value', default=0.5, type=float, help='Bernoulli probability parameter (p-value)')
     parser.add_argument('--lambda-value', default=1.0, type=float, help='Lambda_value for RAMA')
-    parser.add_argument('--sqrt-dim', default= False, help='Whether multiply with sqrt(d) or not')
+    parser.add_argument('--sqrt-dim', action='store_true', help='Whether multiply with sqrt(d) or not')
     parser.add_argument('--bernoulli-values', default='0_1', choices=['0_1', '-1_1'],
                       type=str, help='values for Bernoulli distribution (0/1 or -1/1)')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
@@ -777,7 +785,7 @@ def parse_args():
     parser.add_argument('--bayes-acq', default="ei", choices=["ucb", "ei", "poi"], help='acquisition function for Bayesian optimization')
     parser.add_argument('--bayes-xi', default=0.01, type=float, help='exploration-exploitation parameter for ei/poi')
     parser.add_argument('--bayes-kappa', default=2.5, type=float, help='exploration-exploitation parameter for ucb')
-    parser.add_argument('--optimize-every', default=5, type=int, help='optimize P every N epochs')
+    parser.add_argument('--optimize-every', default=10, type=int, help='optimize P every N epochs')
     return parser.parse_args()
 
 
@@ -834,7 +842,7 @@ def main():
     best_acc = 0
     if args.resume:
         checkpoint_path = os.path.join(args.checkpoint_dir, "checkpoint.pth")
-        if os.path.isfile(checkpoint_path):
+        if (os.path.isfile(checkpoint_path)):
             logger.info(f"Loading checkpoint '{checkpoint_path}'")
             checkpoint = torch.load(checkpoint_path)
             model.load_state_dict(checkpoint['model_state_dict'])
@@ -899,7 +907,6 @@ def main():
         neptune_run.stop()
         
     logger.info(f"Training completed! Best accuracy: {best_acc:.2f}%")
-
 
 if __name__ == "__main__":
     main()
