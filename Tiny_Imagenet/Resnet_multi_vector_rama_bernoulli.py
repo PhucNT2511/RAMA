@@ -332,42 +332,36 @@ class DataManager:
         if hasattr(label_feature, 'names'):
             class2idx = {name: idx for idx, name in enumerate(label_feature.names)}
 
-        # 3) preprocess per-sample cho train
+        # 3) preprocess per-sample cho train, trả về tuple
         def preprocess_train(ex):
-            img = ex["image"]
-            img = self.transform_train(img)
+            img = self.transform_train(ex["image"])
             lbl = ex["label"]
             if class2idx and isinstance(lbl, str):
                 lbl = class2idx[lbl]
-            return {"image": img, "label": lbl}
+            return img, lbl
 
-        # 4) preprocess per-sample cho valid
+        # 4) preprocess per-sample cho valid, trả về tuple
         def preprocess_valid(ex):
-            img = ex["image"]
-            img = self.transform_valid(img)
+            img = self.transform_valid(ex["image"])
             lbl = ex["label"]
             if class2idx and isinstance(lbl, str):
                 lbl = class2idx[lbl]
-            return {"image": img, "label": lbl}
+            return img, lbl
 
         train_ds = train_ds.map(preprocess_train, batched=False)
         valid_ds = valid_ds.map(preprocess_valid, batched=False)
 
-        # 5) Chuyển sang tensor cho PyTorch
-        train_ds.set_format(type="torch", columns=["image", "label"])
-        valid_ds.set_format(type="torch", columns=["image", "label"])
-
-        # 6) Tạo DataLoader
+        # 5) DataLoader tự collate tuple
         train_loader = torch.utils.data.DataLoader(
-            train_ds, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers
+            train_ds, batch_size=self.batch_size,
+            shuffle=True, num_workers=self.num_workers
         )
         valid_loader = torch.utils.data.DataLoader(
-            valid_ds, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers
+            valid_ds, batch_size=self.batch_size,
+            shuffle=False, num_workers=self.num_workers
         )
 
         return train_loader, valid_loader
-
-
 
 
 
