@@ -300,16 +300,12 @@ class ResNet(nn.Module):
 class DataManager:
     """
     Manager for Tiny ImageNet (zh-plus/tiny-imagenet) via Hugging Face Datasets.
-
-    Args:
-        batch_size (int): Batch size for data loaders.
-        num_workers (int): Number of workers for data loading. Default: 2.
     """
     def __init__(self, batch_size, num_workers=2):
         self.batch_size  = batch_size
         self.num_workers = num_workers
 
-        # Transforms cho train/valid (ảnh đã là RGB)
+        # Các transform cho train và valid
         self.transform_train = transforms.Compose([
             transforms.RandomCrop(64, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -328,25 +324,25 @@ class DataManager:
         ])
 
     def get_loaders(self):
-        # 1) Load dataset splits
+        # 1) Load dataset
         ds = load_dataset("zh-plus/tiny-imagenet")
         train_ds, valid_ds = ds["train"], ds["valid"]
 
-        # 2) with_transform trả về tuple (image_tensor, label)
+        # 2) with_transform: batch["image"] là list các PIL.Image → iterate từng ảnh
         train_ds = train_ds.with_transform(
-            lambda ex: (
-                self.transform_train(ex["image"]),
-                ex["label"]
+            lambda batch: (
+                [self.transform_train(img) for img in batch["image"]],
+                batch["label"]
             )
         )
         valid_ds = valid_ds.with_transform(
-            lambda ex: (
-                self.transform_valid(ex["image"]),
-                ex["label"]
+            lambda batch: (
+                [self.transform_valid(img) for img in batch["image"]],
+                batch["label"]
             )
         )
 
-        # 3) DataLoader sẽ tự collate tuple of tensors/int -> (Tensor[bs,3,64,64], Tensor[bs])
+        # 3) Tạo DataLoader (default collate sẽ stack list of tensors)
         train_loader = torch.utils.data.DataLoader(
             train_ds,
             batch_size=self.batch_size,
@@ -361,6 +357,7 @@ class DataManager:
         )
 
         return train_loader, valid_loader
+
 
 
 class Trainer:
