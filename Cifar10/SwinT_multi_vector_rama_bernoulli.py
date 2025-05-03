@@ -46,7 +46,7 @@ class BernoulliRAMALayer(nn.Module):
         activation (str): Activation function to use. Options: relu, leaky_relu, tanh, sigmoid.
     """
     def __init__(self, input_dim, output_dim, p_value, values='0_1', use_normalization=True, 
-                 activation="relu", lambda_value=1.0, sqrt_dim=False):
+                 activation="relu", lambda_value=1.0, sqrt_dim=False, dropout=False):
         super(BernoulliRAMALayer, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -73,6 +73,11 @@ class BernoulliRAMALayer(nn.Module):
         # Add layer normalization for stabilizing the output distribution.
         if use_normalization:
             self.norm = nn.LayerNorm(output_dim)
+        
+        if dropout == True:
+            self.dropout = nn.Dropout()
+        else:
+            self.dropout = nn.Identity()
 
     def forward(self, x, p_value):
         """
@@ -113,7 +118,7 @@ class BernoulliRAMALayer(nn.Module):
             out = torch.tanh(out)
         elif self.activation == "sigmoid":
             out = torch.sigmoid(out)
-        return out
+        return self.dropout(out)
 
 
 class SwinT(nn.Module):
@@ -140,6 +145,7 @@ class SwinT(nn.Module):
                 "use_normalization": True,
                 'lambda_value': 1.0,
                 'sqrt_dim': False,
+                'dropout': False,
             }
             
         self.backbone = swin_t(weights=None)
@@ -158,6 +164,7 @@ class SwinT(nn.Module):
                 rama_config.get('activation', 'relu'),
                 rama_config.get('lambda_value', 1.0),
                 rama_config.get('sqrt_dim', False),
+                rama_config.get('dropout', False),
             )
 
         self.fc = nn.Linear(self.feature_dim, num_classes)
@@ -705,6 +712,8 @@ def get_experiment_name(args: argparse.Namespace) -> str:
         exp_name += "_norm" if args.use_normalization else "_nonorm"
         exp_name += "_sqrt_d_True" if args.sqrt_dim else "_sqrt_d_False"
         exp_name += f"_{args.activation}"
+        exp_name += '_dropout_True' if args.use_dropout else "_dropout_False"
+
         
     exp_name += f"_lr{args.lr}_epochs{args.epochs}_bs{args.batch_size}"
     
@@ -768,6 +777,7 @@ def parse_args():
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
     parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid'],
                         help='activation function for RAMA layers')
+    parser.add_argument('--use-dropout', action='store_true', help='whether to use  dropout in RAMA layers')
     
     # Bayesian optimization parameters - adjusted for probability range
     parser.add_argument('--p-min', default=0.1, type=float, help='minimum P value (p-value) for optimization')
@@ -811,6 +821,7 @@ def main():
         "use_normalization": args.use_normalization,
         "lambda_value": args.lambda_value,
         "sqrt_dim": args.sqrt_dim,
+        "dropout": args.use_dropout,
     }
     
     # Create model
