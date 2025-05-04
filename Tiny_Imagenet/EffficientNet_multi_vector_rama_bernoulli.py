@@ -829,7 +829,7 @@ def main():
         model.parameters(), 
         lr=args.lr, 
         momentum=0.9, 
-        weight_decay=5e-4
+        weight_decay=1e-5
     )
     
     # Resume from checkpoint if specified
