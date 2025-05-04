@@ -270,12 +270,13 @@ class Trainer:
         testloader (DataLoader): Testing data loader.
         criterion (nn.Module): Loss function.
         optimizer (optim.Optimizer): Optimizer.
+        scheduler (optim.lr_scheduler): Scheduler.
         device (torch.device): Device to use for training.
         checkpoint_dir (str): Directory to save checkpoints.
         bayes_opt_config (dict): Configuration for Bayesian optimization.
         neptune_run: Neptune.ai run instance
     """
-    def __init__(self, model, trainloader, testloader, criterion, optimizer, 
+    def __init__(self, model, trainloader, testloader, criterion, optimizer, scheduler,
                  device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None):
@@ -284,6 +285,7 @@ class Trainer:
         self.testloader = testloader
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.best_acc = 0
@@ -658,6 +660,8 @@ class Trainer:
                         self.bayesian_optimizer.set_bounds(
                             new_bounds={"p_value": (new_min, self.bayes_opt_config["p_max"])}
                         )
+                        
+            self.scheduler.step()
 
             # Log metrics.
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
@@ -691,6 +695,7 @@ class Trainer:
                 "epoch": epoch,
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
+                "scheduler_state_dict": self.scheduler.state_dict(),
                 "best_acc": self.best_acc,
                 "best_p": self.best_p,
             }, is_best)
@@ -825,10 +830,14 @@ def main():
 
     # Loss function and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(
-        model.parameters(), 
+    optimizer = torch.optim.SGD(
+        model.parameters(),
         lr=args.lr,
+        momentum=0.9,
+        weight_decay=1e-5,
+        nesterov=True
     )
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     
     # Resume from checkpoint if specified
     start_epoch = 0
@@ -840,6 +849,7 @@ def main():
             checkpoint = torch.load(checkpoint_path)
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             start_epoch = checkpoint['epoch'] + 1
             best_acc = checkpoint['best_acc']
             logger.info(f"Loaded checkpoint '{checkpoint_path}' (epoch {checkpoint['epoch']})")
@@ -879,6 +889,7 @@ def main():
         testloader=testloader,
         criterion=criterion,
         optimizer=optimizer,
+        scheduler = scheduler,
         device=device,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
