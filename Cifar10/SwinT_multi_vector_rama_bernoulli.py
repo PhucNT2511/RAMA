@@ -890,6 +890,7 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
         use_rama=args.use_rama,
+        use_hyperparameter_optimization=args.use_hyperparameter_optimization,
         neptune_run=neptune_run,
         writer=writer
     )
