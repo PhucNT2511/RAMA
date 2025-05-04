@@ -116,6 +116,15 @@ class EfficientNet(nn.Module):
                 }
             
         self.backbone = efficientnet_b2(weights=None)
+        ### Because original model works well with 260x260 images, so if want to train in 32x32, should change in the 1st conv layer.
+        self.backbone.features[0][0] = nn.Conv2d(
+            in_channels=3,
+            out_channels=32,
+            kernel_size=3,
+            stride=1,     # From 2 -> 1
+            padding=1,    #
+            bias=False
+        )
         self.feature_dim = self.backbone.classifier[1].in_features
 
         self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
