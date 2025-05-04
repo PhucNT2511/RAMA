@@ -144,6 +144,15 @@ class EfficientNet(nn.Module):
             }
 
         self.backbone = efficientnet_b2(weights=None)
+        ### Because original model works well with 260x260 images, so if want to train in 32x32, should change in the 1st conv layer.
+        self.backbone.features[0][0] = nn.Conv2d(
+            in_channels=3,
+            out_channels=32,
+            kernel_size=3,
+            stride=1,     # From 2 -> 1
+            padding=1,    #
+            bias=False
+        )
         self.feature_dim = self.backbone.classifier[1].in_features
 
         self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
@@ -834,10 +843,9 @@ def main():
         model.parameters(),
         lr=args.lr,
         momentum=0.9,
-        weight_decay=1e-5,
-        nesterov=True
+        weight_decay=5e-4,
     )
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     
     # Resume from checkpoint if specified
     start_epoch = 0
@@ -889,7 +897,7 @@ def main():
         testloader=testloader,
         criterion=criterion,
         optimizer=optimizer,
-        scheduler = scheduler,
+        scheduler=scheduler,
         device=device,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
