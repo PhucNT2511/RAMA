@@ -29,8 +29,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 MAX_p_value = 10
 MIN_p_value = 1e-3
-NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
-NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
+NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PRJ_NAME")
+NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN")
+
 
 ##### RAMA with Bernoulli for U matrix instead of norm distribution
 class BernoulliRAMALayer(nn.Module):
@@ -54,11 +55,12 @@ class BernoulliRAMALayer(nn.Module):
         self.activation = activation
         self.use_normalization = use_normalization
         self.lambda_value = lambda_value
-
-        self.sqrt_d = 1
+        self.sqrt_dim = sqrt_dim
         if sqrt_dim == True:
             self.sqrt_d = math.sqrt(input_dim)
-        
+        else:
+            self.sqrt_d = 1
+
         # Initialize Bernoulli projection matrix
         # For 0/1 values, we use a threshold of 0.5 initially
         # For -1/1 values, we use a threshold of 0.5 but convert to -1/1
@@ -73,6 +75,19 @@ class BernoulliRAMALayer(nn.Module):
         # Add layer normalization for stabilizing the output distribution.
         if use_normalization:
             self.norm = nn.LayerNorm(output_dim)
+        self.current_mask = None  # For fixed mask per N epochs
+        self.current_p = None
+
+    def update_mask(self, p_value):
+        """Update the fixed mask for the current epoch."""
+        if self.values == '0_1':
+            mask = (torch.rand_like(self.projection) < p_value).float()
+        elif self.values == '-1_1':
+            mask = 2 * (torch.rand_like(self.projection) < p_value).float() - 1
+        else:
+            raise ValueError(f"Unknown values: {self.values}. Use '0_1' or '-1_1'")
+        self.current_mask = mask
+        self.current_p = p_value
 
     def forward(self, x, p_value):
         """
@@ -80,26 +95,24 @@ class BernoulliRAMALayer(nn.Module):
         
         Args:
             x: Input tensor
-            p_value: Value controlling the Bernoulli parameter p
+            p_value: Val  qf÷ue controlling the Bernoulli parameter p
         """
         # Generate a dynamic Bernoulli mask based on p_value
         # For inference or when p_value is None, use the stored projection
         if p_value is not None and self.training:
-            # Clamp p_value between 0.01 and 0.99 to avoid extreme values
-            p = max(0.01, min(0.99, p_value))
-            
-            # Generate a new Bernoulli mask
-            if self.values == '0_1':
-                mask = (torch.rand_like(self.projection) < p).float()
-            elif self.values == '-1_1':
-                mask = 2 * (torch.rand_like(self.projection) < p).float() - 1
-                
-            out = x @ mask
+            # Use the fixed mask if available and p_value matches, else update
+            if self.current_mask is None or self.current_p != p_value:
+                self.update_mask(p_value)
+            out = x @ self.current_mask
         else:
             out = x @ self.projection
 
-        out = out * self.lambda_value * self.sqrt_d
-
+        # Apply correct scaling - multiply by lambda and normalize by sqrt_d if needed
+        out = out * self.lambda_value
+        if self.sqrt_dim:
+            # Correct scaling: multiply by 1/sqrt(d) for stability
+            out = out / self.sqrt_d
+        
         # Apply normalization if specified
         if self.use_normalization:
             out = self.norm(out)
@@ -617,6 +630,11 @@ class Trainer:
         for epoch in range(start_epoch, epochs):
             logger.info(f"\nEpoch: {epoch+1}/{epochs}")
 
+            # Update RAMA mask every optimize_every epochs (including first epoch)
+            if self.use_rama and hasattr(self.model, "rama_linearLayer"):
+                if epoch % self.bayes_opt_config["optimize_every"] == 0:
+                    self.model.rama_linearLayer.update_mask(self.best_p if self.best_p is not None else self.model.rama_linearLayer.lambda_value)
+
             # Train with best p
             train_loss, train_acc = self.train_one_epoch(p_value=self.best_p)
             
@@ -889,6 +907,7 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
         use_rama=args.use_rama,
+        use_hyperparameter_optimization=args.use_hyperparameter_optimization,
         neptune_run=neptune_run,
         writer=writer
     )
