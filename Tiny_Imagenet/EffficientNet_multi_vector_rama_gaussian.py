@@ -118,6 +118,15 @@ class EfficientNet(nn.Module):
                 }
             
         self.backbone = efficientnet_b2(weights=None)
+        ### Because original model works well with 260x260 images, so if want to train in 32x32, should change in the 1st conv layer.
+        self.backbone.features[0][0] = nn.Conv2d(
+            in_channels=3,
+            out_channels=32,
+            kernel_size=3,
+            stride=1,     # From 2 -> 1
+            padding=1,    #
+            bias=False
+        )
         self.feature_dim = self.backbone.classifier[1].in_features
 
         self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
@@ -242,12 +251,13 @@ class Trainer:
         testloader (DataLoader): Testing data loader.
         criterion (nn.Module): Loss function.
         optimizer (optim.Optimizer): Optimizer.
+        scheduler (optim.lr_scheduler): Scheduler.
         device (torch.device): Device to use for training.
         checkpoint_dir (str): Directory to save checkpoints.
         bayes_opt_config (dict): Configuration for Bayesian optimization.
         neptune_run: Neptune.ai run instance
     """
-    def __init__(self, model, trainloader, testloader, criterion, optimizer, 
+    def __init__(self, model, trainloader, testloader, criterion, optimizer, scheduler,
                  device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None):
@@ -256,6 +266,7 @@ class Trainer:
         self.testloader = testloader
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.best_acc = 0
@@ -630,6 +641,7 @@ class Trainer:
                         self.bayesian_optimizer.set_bounds(
                             new_bounds={"lambda_value": (new_min, self.bayes_opt_config["lambda_max"])}
                         )
+            self.scheduler.step()
 
             # Log metrics.
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
@@ -663,6 +675,7 @@ class Trainer:
                 "epoch": epoch,
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
+                "scheduler_state_dict": self.scheduler.state_dict(),
                 "best_acc": self.best_acc,
                 "best_lambda": self.best_lambda,
             }, is_best)
@@ -789,12 +802,13 @@ def main():
 
     # Loss function and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(
-        model.parameters(), 
-        lr=args.lr, 
-        momentum=0.9, 
-        weight_decay=1e-5
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=args.lr,
+        momentum=0.9,
+        weight_decay=5e-4,
     )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     
     # Resume from checkpoint if specified
     start_epoch = 0
@@ -806,6 +820,7 @@ def main():
             checkpoint = torch.load(checkpoint_path)
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             start_epoch = checkpoint['epoch'] + 1
             best_acc = checkpoint['best_acc']
             logger.info(f"Loaded checkpoint '{checkpoint_path}' (epoch {checkpoint['epoch']})")
@@ -845,6 +860,7 @@ def main():
         testloader=testloader,
         criterion=criterion,
         optimizer=optimizer,
+        scheduler=scheduler,
         device=device,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
