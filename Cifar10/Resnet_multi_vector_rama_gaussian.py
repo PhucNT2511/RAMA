@@ -14,7 +14,7 @@ from common.resnet import resnet18
 from common.utils import set_seed, setup_experiment_folders, setup_logging, parse_rama_positions
 
 # Environment variables
-NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PRJ_NAME")
+NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PROJECT")
 NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN")
 
 
