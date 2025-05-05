@@ -144,7 +144,7 @@ class EfficientNet(nn.Module):
         self.dropout = nn.Dropout(p=0.3, inplace=False)
         self.fc = nn.Linear(self.feature_dim, num_classes)
         self.features_2 = nn.Sequential(
-            self.dropout,
+        #    self.dropout,
             self.fc
         )
         
