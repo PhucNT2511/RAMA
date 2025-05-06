@@ -786,7 +786,7 @@ def parse_args():
     parser.add_argument('--bernoulli-values', default='0_1', choices=['0_1', '-1_1'],
                       type=str, help='values for Bernoulli distribution (0/1 or -1/1)')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
-    parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid'],
+    parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu', 'gelu'],
                         help='activation function for RAMA layers')
     
     # Bayesian optimization parameters - adjusted for probability range
