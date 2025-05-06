@@ -57,7 +57,7 @@ def parse_args():
     parser.add_argument('--lambda-value', default=1.0, type=float, help='Lambda value for RAMA')
     parser.add_argument('--sqrt-dim', action='store_true', help='Whether to divide by sqrt(d)')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
-    parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid'],
+    parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu'],
                         help='activation function for RAMA layers')
                       
     # Gaussian-specific parameters
