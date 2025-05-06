@@ -68,7 +68,7 @@ def parse_args():
     parser.add_argument('--bernoulli-values', default='0_1', choices=['0_1', '-1_1'],
                       type=str, help='values for Bernoulli distribution (0/1 or -1/1)')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
-    parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu'],
+    parser.add_argument('--activation', default='silu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu'],
                         help='activation function for RAMA layers')
     parser.add_argument('--evolution-rate', default=0.1, type=float, help='Rate at which RAMA mask evolves')
     
@@ -208,7 +208,7 @@ def main():
         neptune_run["rama_positions"] = rama_positions
     else:
         neptune_run = None
-    
+
     # Set up experiment directories and TensorBoard
     exp_dir = setup_experiment_folders(exp_name)
     writer = SummaryWriter(log_dir=os.path.join(exp_dir, "logs"))
