@@ -9,34 +9,33 @@ from torch.utils.tensorboard import SummaryWriter
 # Import common modules
 from common.data import DataManager
 from common.trainer import Trainer
-from common.densenet import DenseNet121
+from common.efficientnet import EfficientNet
 from common.utils import set_seed, setup_experiment_folders, setup_logging
 
 # Environment variables
 NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
 NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
 
-
 def get_experiment_name(args):
     """Generate a unique experiment name based on configuration."""
-    exp_name = "DenseNet121"
-    exp_name += "_BernoulliRAMA" if args.use_rama else "_NoRAMA"
+    exp_name = "EfficientNet_B2"
+    exp_name += f"_{args.rama_type.capitalize()}RAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
-        # Include RAMA positions in name
-        positions = args.rama_positions.replace(',', '_')
-        exp_name += f"_pos({positions})"
-        
-        exp_name += f"_{args.bernoulli_values}"  # Add Bernoulli value type (0/1 or -1/1)
+        if args.rama_type == 'bernoulli':
+            exp_name += f"_{args.bernoulli_values}"  # Add Bernoulli value type (0/1 or -1/1)
+        else:  # gaussian
+            exp_name += f"_mu{args.mu}_sigma{args.sigma}"
+            
         exp_name += "_norm" if args.use_normalization else "_nonorm"
-        exp_name += "_sqrt_d" if args.sqrt_dim else "_no_sqrt_d"
+        exp_name += "_sqrt_d_True" if args.sqrt_dim else "_sqrt_d_False"
         exp_name += f"_{args.activation}"
-        exp_name += f"_dimred{args.dim_reduction_factor:.2f}"
         
     exp_name += f"_lr{args.lr}_epochs{args.epochs}_bs{args.batch_size}"
     
     if args.use_rama:
-        exp_name += f"_p{args.p_value:.2f}"
+        if args.rama_type == 'bernoulli':
+            exp_name += f"_p{args.p_value:.2f}"
         exp_name += f"_lambda{args.lambda_value:.2f}"
 
     return exp_name
@@ -44,11 +43,11 @@ def get_experiment_name(args):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with DenseNet121 and Bernoulli RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with EfficientNet-B2 and RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
-    parser.add_argument('--epochs', default=50, type=int, help='number of epochs')
+    parser.add_argument('--epochs', default=20, type=int, help='number of epochs')
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
     parser.add_argument('--data-dir', default='./data', help='data directory')
     parser.add_argument('--checkpoint-dir', default='./checkpoints', help='checkpoint directory')
@@ -58,44 +57,50 @@ def parse_args():
     
     # RAMA configuration
     parser.add_argument('--use-rama', action='store_true', help='whether to use RAMA layers')
-    parser.add_argument('--use-hyperparameter-optimization', action='store_true', help='whether to use Bayesian optimization for p-value')
-    parser.add_argument('--rama-positions', default='dense1,dense2,dense3,dense4,final',
-                       type=str, help='comma-separated list of positions to apply RAMA (options: dense1,dense2,dense3,dense4,final)')
+    parser.add_argument('--rama-type', default='bernoulli', choices=['bernoulli', 'gaussian'], 
+                       help='type of RAMA layer to use')
+    parser.add_argument('--use-hyperparameter-optimization', action='store_true', 
+                       help='whether to use Bayesian optimization for hyperparameters')
+    parser.add_argument('--lambda-value', default=1.0, type=float, help='Lambda value for RAMA')
+    parser.add_argument('--sqrt-dim', action='store_true', help='Whether to divide by sqrt(d)')
+    parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
+    parser.add_argument('--activation', default='silu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu'],
+                        help='activation function for RAMA layers')
+    parser.add_argument('--evolution-rate', default=0.1, type=float, help='Rate at which RAMA mask evolves')
+    
+    # Bernoulli-specific parameters
     parser.add_argument('--p-value', default=0.5, type=float, help='Bernoulli probability parameter (p-value)')
-    parser.add_argument('--lambda-value', default=1.0, type=float, help='Lambda_value for RAMA')
-    parser.add_argument('--sqrt-dim', action='store_true', help='Whether to normalize by sqrt(input_dim)')
     parser.add_argument('--bernoulli-values', default='0_1', choices=['0_1', '-1_1'],
                       type=str, help='values for Bernoulli distribution (0/1 or -1/1)')
-    parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
-    parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid'],
-                        help='activation function for RAMA layers')
-    parser.add_argument('--dim-reduction-factor', default=1.0, type=float, 
-                       help='factor to reduce dimensions by in RAMA layers')
+                      
+    # Gaussian-specific parameters
+    parser.add_argument('--mu', default=0.0, type=float, help='Mean for Gaussian distribution')
+    parser.add_argument('--sigma', default=1.0, type=float, help='Standard deviation for Gaussian distribution')
     
     # Bayesian optimization parameters
-    parser.add_argument('--p-min', default=0.01, type=float, help='minimum P value (p-value) for optimization')
-    parser.add_argument('--p-max', default=0.99, type=float, help='maximum P value (p-value) for optimization')
-    parser.add_argument('--bayes-init-points', default=10, type=int, help='number of initial points for Bayesian optimization')
-    parser.add_argument('--bayes-n-iter', default=30, type=int, help='number of iterations for Bayesian optimization')
+    parser.add_argument('--p-min', default=0.1, type=float, help='minimum P value for optimization')
+    parser.add_argument('--p-max', default=1.0, type=float, help='maximum P value for optimization')
+    parser.add_argument('--bayes-init-points', default=5, type=int, help='number of initial points for Bayesian optimization')
+    parser.add_argument('--bayes-n-iter', default=15, type=int, help='number of iterations for Bayesian optimization')
     parser.add_argument('--bayes-acq', default="ei", choices=["ucb", "ei", "poi"], help='acquisition function for Bayesian optimization')
     parser.add_argument('--bayes-xi', default=0.01, type=float, help='exploration-exploitation parameter for ei/poi')
     parser.add_argument('--bayes-kappa', default=2.5, type=float, help='exploration-exploitation parameter for ucb')
-    parser.add_argument('--optimize-every', default=5, type=int, help='baseline optimization frequency (in epochs)')
-    
+    parser.add_argument('--optimize-every', default=5, type=int, help='optimize P every N epochs')
     return parser.parse_args()
+
 
 def main():
     """Main function for training and evaluating the model."""
     args = parse_args()
-    
+
     # Set up logging
     logger = setup_logging("training.log")
     logger.info(f"Starting training with arguments: {args}")
-    
+
     # Set random seeds for reproducibility
     set_seed(args.seed)
     logger.info(f"Set random seed to {args.seed}")
-    
+
     # Create checkpoint directory if it doesn't exist
     if not os.path.exists(args.checkpoint_dir):
         os.makedirs(args.checkpoint_dir)
@@ -104,29 +109,37 @@ def main():
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
-    
+
     # Prepare data
     data_manager = DataManager(args.data_dir, args.batch_size, args.num_workers)
     trainloader, testloader = data_manager.get_loaders()
     
-    # RAMA configuration
-    rama_config = {
-        "p_value": args.p_value,
-        "values": args.bernoulli_values,
-        "activation": args.activation,
-        "use_normalization": args.use_normalization,
-        "lambda_value": args.lambda_value,
-        "sqrt_dim": args.sqrt_dim,
-        "dim_reduction_factor": args.dim_reduction_factor,
-        "positions": args.rama_positions.split(',')  # Parse positions from command line
-    }
+    # Configure RAMA parameters
+    if args.rama_type == 'bernoulli':
+        rama_config = {
+            "p_value": args.p_value,
+            "values": args.bernoulli_values,
+            "activation": args.activation,
+            "use_normalization": args.use_normalization,
+            "lambda_value": args.lambda_value,
+            "sqrt_dim": args.sqrt_dim,
+        }
+    else:  # gaussian
+        rama_config = {
+            "mu": args.mu,
+            "sigma": args.sigma,
+            "activation": args.activation,
+            "use_normalization": args.use_normalization,
+            "lambda_value": args.lambda_value,
+            "sqrt_dim": args.sqrt_dim,
+        }
     
     # Create model
-    model = DenseNet121(
+    model = EfficientNet(
         num_classes=10, 
         use_rama=args.use_rama,
         rama_config=rama_config,
-        rama_type='bernoulli'
+        rama_type=args.rama_type
     ).to(device)
 
     # Loss function and optimizer
@@ -137,9 +150,6 @@ def main():
         momentum=0.9, 
         weight_decay=5e-4
     )
-    
-    # Learning rate scheduler for better convergence
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     
     # Resume from checkpoint if specified
     start_epoch = 0
@@ -178,8 +188,9 @@ def main():
             name=exp_name
         )
         neptune_run["config"] = vars(args)
-        neptune_run["bayes_config"] = bayes_opt_config
         neptune_run["rama_config"] = rama_config
+        if args.use_hyperparameter_optimization:
+            neptune_run["bayes_config"] = bayes_opt_config
     else:
         neptune_run = None
     
@@ -200,8 +211,7 @@ def main():
         use_rama=args.use_rama,
         use_hyperparameter_optimization=args.use_hyperparameter_optimization,
         neptune_run=neptune_run,
-        writer=writer,
-        scheduler=scheduler
+        writer=writer
     )
     
     # Set best accuracy if resuming

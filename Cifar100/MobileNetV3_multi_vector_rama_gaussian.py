@@ -1,5 +1,6 @@
 import argparse
 import os
+import logging
 import neptune
 import torch
 import torch.nn as nn
@@ -9,25 +10,24 @@ from torch.utils.tensorboard import SummaryWriter
 # Import common modules
 from common.data import DataManager
 from common.trainer import Trainer
-from common.densenet import DenseNet121
+from common.mobilenet import MobileNetV3Small
 from common.utils import set_seed, setup_experiment_folders, setup_logging
 
 # Environment variables
 NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
 NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
 
-
 def get_experiment_name(args):
     """Generate a unique experiment name based on configuration."""
-    exp_name = "DenseNet121"
-    exp_name += "_BernoulliRAMA" if args.use_rama else "_NoRAMA"
+    exp_name = "MobileNetV3Small"
+    exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
         # Include RAMA positions in name
         positions = args.rama_positions.replace(',', '_')
         exp_name += f"_pos({positions})"
         
-        exp_name += f"_{args.bernoulli_values}"  # Add Bernoulli value type (0/1 or -1/1)
+        exp_name += f"_{args.mu}_{args.sigma}"  # Add Gaussian parameters
         exp_name += "_norm" if args.use_normalization else "_nonorm"
         exp_name += "_sqrt_d" if args.sqrt_dim else "_no_sqrt_d"
         exp_name += f"_{args.activation}"
@@ -36,7 +36,6 @@ def get_experiment_name(args):
     exp_name += f"_lr{args.lr}_epochs{args.epochs}_bs{args.batch_size}"
     
     if args.use_rama:
-        exp_name += f"_p{args.p_value:.2f}"
         exp_name += f"_lambda{args.lambda_value:.2f}"
 
     return exp_name
@@ -44,7 +43,7 @@ def get_experiment_name(args):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with DenseNet121 and Bernoulli RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with MobileNetV3 Small and Gaussian RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
@@ -58,31 +57,20 @@ def parse_args():
     
     # RAMA configuration
     parser.add_argument('--use-rama', action='store_true', help='whether to use RAMA layers')
-    parser.add_argument('--use-hyperparameter-optimization', action='store_true', help='whether to use Bayesian optimization for p-value')
-    parser.add_argument('--rama-positions', default='dense1,dense2,dense3,dense4,final',
-                       type=str, help='comma-separated list of positions to apply RAMA (options: dense1,dense2,dense3,dense4,final)')
-    parser.add_argument('--p-value', default=0.5, type=float, help='Bernoulli probability parameter (p-value)')
+    parser.add_argument('--rama-positions', default='layer0,layer1,layer2,layer3,final',
+                       type=str, help='comma-separated list of positions to apply RAMA (options: layer0,layer1,layer2,layer3,final)')
+    parser.add_argument('--mu', default=0.0, type=float, help='Mean (mu) for Gaussian distribution')
+    parser.add_argument('--sigma', default=1.0, type=float, help='Standard deviation (sigma) for Gaussian distribution')
     parser.add_argument('--lambda-value', default=1.0, type=float, help='Lambda_value for RAMA')
     parser.add_argument('--sqrt-dim', action='store_true', help='Whether to normalize by sqrt(input_dim)')
-    parser.add_argument('--bernoulli-values', default='0_1', choices=['0_1', '-1_1'],
-                      type=str, help='values for Bernoulli distribution (0/1 or -1/1)')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
     parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid'],
                         help='activation function for RAMA layers')
     parser.add_argument('--dim-reduction-factor', default=1.0, type=float, 
                        help='factor to reduce dimensions by in RAMA layers')
     
-    # Bayesian optimization parameters
-    parser.add_argument('--p-min', default=0.01, type=float, help='minimum P value (p-value) for optimization')
-    parser.add_argument('--p-max', default=0.99, type=float, help='maximum P value (p-value) for optimization')
-    parser.add_argument('--bayes-init-points', default=10, type=int, help='number of initial points for Bayesian optimization')
-    parser.add_argument('--bayes-n-iter', default=30, type=int, help='number of iterations for Bayesian optimization')
-    parser.add_argument('--bayes-acq', default="ei", choices=["ucb", "ei", "poi"], help='acquisition function for Bayesian optimization')
-    parser.add_argument('--bayes-xi', default=0.01, type=float, help='exploration-exploitation parameter for ei/poi')
-    parser.add_argument('--bayes-kappa', default=2.5, type=float, help='exploration-exploitation parameter for ucb')
-    parser.add_argument('--optimize-every', default=5, type=int, help='baseline optimization frequency (in epochs)')
-    
     return parser.parse_args()
+
 
 def main():
     """Main function for training and evaluating the model."""
@@ -111,8 +99,8 @@ def main():
     
     # RAMA configuration
     rama_config = {
-        "p_value": args.p_value,
-        "values": args.bernoulli_values,
+        "mu": args.mu,
+        "sigma": args.sigma,
         "activation": args.activation,
         "use_normalization": args.use_normalization,
         "lambda_value": args.lambda_value,
@@ -122,11 +110,11 @@ def main():
     }
     
     # Create model
-    model = DenseNet121(
+    model = MobileNetV3Small(
         num_classes=10, 
         use_rama=args.use_rama,
         rama_config=rama_config,
-        rama_type='bernoulli'
+        rama_type='gaussian'
     ).to(device)
 
     # Loss function and optimizer
@@ -157,18 +145,6 @@ def main():
         else:
             logger.warning(f"No checkpoint found at '{checkpoint_path}'")
 
-    # Bayesian optimization configuration
-    bayes_opt_config = {
-        "init_points": args.bayes_init_points,
-        "n_iter": args.bayes_n_iter,
-        "acq": args.bayes_acq,
-        "xi": args.bayes_xi,
-        "kappa": args.bayes_kappa,
-        "p_min": args.p_min,
-        "p_max": args.p_max,
-        "optimize_every": args.optimize_every,
-    }
-
     # Set up experiment tracking
     exp_name = get_experiment_name(args)
     if NEPTUNE_PRJ_NAME and NEPTUNE_API_TOKEN:
@@ -178,7 +154,6 @@ def main():
             name=exp_name
         )
         neptune_run["config"] = vars(args)
-        neptune_run["bayes_config"] = bayes_opt_config
         neptune_run["rama_config"] = rama_config
     else:
         neptune_run = None
@@ -196,9 +171,9 @@ def main():
         optimizer=optimizer,
         device=device,
         checkpoint_dir=os.path.join(exp_dir, "checkpoints"),
-        bayes_opt_config=bayes_opt_config if args.use_hyperparameter_optimization else None,
+        bayes_opt_config=None,
         use_rama=args.use_rama,
-        use_hyperparameter_optimization=args.use_hyperparameter_optimization,
+        use_hyperparameter_optimization=False,  # Gaussian RAMA doesn't use hyperparameter optimization
         neptune_run=neptune_run,
         writer=writer,
         scheduler=scheduler

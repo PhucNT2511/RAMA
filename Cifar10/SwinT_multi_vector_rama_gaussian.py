@@ -13,9 +13,8 @@ from common.swint import ImprovedSwinT
 from common.utils import set_seed, setup_experiment_folders, setup_logging
 
 # Environment variables
-NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PROJECT")
-NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN")
-
+NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
+NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
 
 def get_experiment_name(args):
     """Generate a unique experiment name based on configuration."""
