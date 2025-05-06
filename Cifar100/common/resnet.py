@@ -44,7 +44,7 @@ class ResNet(nn.Module):
         rama_positions: Dictionary of positions to apply RAMA
         rama_type: Type of RAMA to use ('bernoulli' or 'gaussian')
     """
-    def __init__(self, block, num_blocks, num_classes=10, use_rama=False, 
+    def __init__(self, block, num_blocks, num_classes=100, use_rama=False, 
                  rama_config=None, rama_positions=None, rama_type='bernoulli'):
         super(ResNet, self).__init__()
         self.in_channels = 64
@@ -311,7 +311,7 @@ class ResNet(nn.Module):
                 self.rama_final.update_mask(sigma=p_value)
 
 
-def resnet18(num_classes=10, use_rama=False, rama_config=None, rama_positions=None, rama_type='bernoulli'):
+def resnet18(num_classes=100, use_rama=False, rama_config=None, rama_positions=None, rama_type='bernoulli'):
     """
     Create a ResNet-18 model with optional RAMA layers.
     """

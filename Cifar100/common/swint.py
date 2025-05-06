@@ -110,7 +110,7 @@ class ImprovedSwinT(nn.Module):
         rama_config (dict): Configuration for RAMA layers
         rama_type (str): Type of RAMA layer to use ('bernoulli' or 'gaussian')
     """
-    def __init__(self, num_classes=10, use_rama=False, rama_config=None, rama_type='bernoulli'):
+    def __init__(self, num_classes=100, use_rama=False, rama_config=None, rama_type='bernoulli'):
         super().__init__()
         self.use_rama = use_rama
         self.num_classes = num_classes

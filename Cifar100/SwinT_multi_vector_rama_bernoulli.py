@@ -123,7 +123,7 @@ def main():
     
     # Create model
     model = ImprovedSwinT(
-        num_classes=10, 
+        num_classes=100, 
         use_rama=args.use_rama,
         rama_config=rama_config,
         rama_type='bernoulli'

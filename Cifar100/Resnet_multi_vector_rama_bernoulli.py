@@ -128,7 +128,7 @@ def main():
     
     # Create model
     model = resnet18(
-        num_classes=10, 
+        num_classes=100, 
         use_rama=args.use_rama,
         rama_config=rama_config,
         rama_positions=rama_positions,
