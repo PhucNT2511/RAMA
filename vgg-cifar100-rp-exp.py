@@ -242,6 +242,7 @@ def main(args: argparse.Namespace) -> None:
     
     wandb.init(
         project="vgg16-cifar100-rp-exp",  # Replace with your project name
+        name=experiment_name,
     )
 
     # Transforms & Dataset
