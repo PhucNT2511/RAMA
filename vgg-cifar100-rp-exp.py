@@ -9,7 +9,8 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.models import vgg16, VGG16_Weights
+from torchvision.models import vgg16
+import math
 
 
 import wandb
@@ -20,14 +21,6 @@ for handler in logging.root.handlers[:]:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Hyperparameters
-BATCH_SIZE = 128
-EPOCHS = 100
-LEARNING_RATE = 5e-6
-BETA1 = 0.9
-BETA2 = 0.999
-EPSILON = 1e-8
-WEIGHT_DECAY = 1e-4
 
 ## Just to name exp
 def get_experiment_name(args: argparse.Namespace) -> str:
@@ -42,7 +35,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     """
     experiment_name = "VGG16_CIFAR100"
     if args.use_rp:
-        experiment_name += f"_RP_lambda_{args.lambda_value}"
+        experiment_name += f"_RP_lambda_{args.lambda_value}_lr{args.learning_rate}_bs{args.batch_size}_activation{args.activation}"
     return experiment_name
 
 ## Actually, RM
@@ -56,13 +49,27 @@ class RanPACLayer(nn.Module):
         lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
         norm_type (str): Normalization type, either "batch" or "layer".
     """
-    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch"):
+    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch", activation: str = "relu"):
+        """
+        Initialize the RanPACLayer.
+
+        Args:
+            input_dim (int): Input dimension.
+            output_dim (int): Output dimension.
+            lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
+            norm_type (str): Normalization type, either "batch" or "layer".
+        """ 
         super(RanPACLayer, self).__init__()
-        self.projection = nn.Linear(input_dim, output_dim, bias=False) ##Phép biến đổi tuyến tính, nhưng thực chất là tạo một ma trận chiếu
-        self.projection.weight.requires_grad = False  ## Không đặt grad cho phép chiếu (hợp lý)
-        nn.init.normal_(self.projection.weight, mean=0, std=1.0) ## Phân phối Gauss cho khởi tạo trọng số của ma trận chiếu, mà đằng nào cũng ko học gì
-        self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) #Để là lambda, hoặc tham số học được với khởi tạo 1e-3
+
+        self.projection = nn.Linear(input_dim, output_dim, bias=False) 
+        self.projection.weight.requires_grad = False  
+        nn.init.normal_(self.projection.weight, mean=0, std=1.0) 
+
+        self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) 
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
+
+        self.sqrt_dim = math.sqrt(input_dim)
+        self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -74,9 +81,21 @@ class RanPACLayer(nn.Module):
         Returns:
             torch.Tensor: Transformed tensor.
         """
-        x = self.projection(x) * self.lambda_param
-        x = nn.functional.leaky_relu(x, negative_slope=0.2)
-        x = self.norm(x)
+        x = self.projection(x) * self.lambda_param * self.sqrt_dim
+
+        if self.activation == "relu":  
+            x = nn.functional.relu(x)
+        elif self.activation == "leaky_relu":
+            x = nn.functional.leaky_relu(x, negative_slope=0.01)
+        elif self.activation == "sigmoid":
+            x = torch.sigmoid(x)
+        elif self.activation == "tanh":
+            x = torch.tanh(x)
+        elif self.activation == "silu":
+            x = torch.nn.functional.silu(x)
+        elif self.activation == "gelu":
+            x = torch.nn.functional.gelu(x)
+        #x = self.norm(x)
         return x
 
 ## VGG16
@@ -89,22 +108,24 @@ class VGG16(nn.Module):
         use_rp (bool): Whether to use the RanPACLayer.
         lambda_value (Optional[float]): Lambda scaling value for RanPACLayer.
     """
-    def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None):
+    def __init__(self, num_classes: int, use_rp: bool = False, lambda_value: Optional[float] = None, activation: str = "relu"):
+        """
+        Initialize the VGG16 model.
+        """
         super().__init__()
-        self.model = vgg16(weights=VGG16_Weights.DEFAULT)  ## Lấy trọng số pre-trained
+        self.model = vgg16(weights=None)  
         self.features = nn.Sequential(
             *self.model.features,    
             self.model.avgpool,   
         )
-        self.features2 = nn.Sequential(*list(self.model.classifier[:-1]) )    # Lấy các lớp trong classifier, trừ FC cuối
-        num_features = self.model.classifier[6].in_features  ## số nơ-ron đầu vào (in_features) của FC
+        self.features2 = nn.Sequential(*list(self.model.classifier[:-1]) )    
+        num_features = self.model.classifier[6].in_features  
         self.use_rp = use_rp
-        if use_rp:       
-            self.rp1 = RanPACLayer(25088, 25088, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều     
-            self.rp2 = RanPACLayer(num_features, num_features, lambda_value)  ## Đây là chiếu từ cao chiều xuống thấp chiều
-            self.fc = nn.Linear(num_features , num_classes) ##FC
+        if use_rp:          
+            self.rp = RanPACLayer(num_features, num_features, lambda_value, activation=activation)  
+            self.fc = nn.Linear(num_features , num_classes) 
         else:
-            self.fc = nn.Linear(num_features, num_classes) ##FC
+            self.fc = nn.Linear(num_features, num_classes) 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -116,11 +137,10 @@ class VGG16(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        x = torch.flatten(self.features(x), 1) ## Tính toán dữ liệu đầu vào + Làm phẳng
+        x = torch.flatten(self.features(x), 1) 
         if self.use_rp:
-            x = self.rp1(x)
             x = self.features2(x)
-            x = self.rp2(x)
+            x = self.rp(x)
         else:
             x = self.features2(x)
         return self.fc(x)
@@ -226,14 +246,15 @@ def main(args: argparse.Namespace) -> None:
 
     # Transforms & Dataset
     transform_train = transforms.Compose([
-        #transforms.Resize(224),
-        transforms.RandomCrop(32, padding=4), 
+        transforms.Resize(224),
+        transforms.RandomCrop(224, padding=16), 
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
     ])
 
     transform_test = transforms.Compose([
+        transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
     ])
@@ -241,17 +262,17 @@ def main(args: argparse.Namespace) -> None:
     train_dataset = torchvision.datasets.CIFAR100(root="./data", train=True, download=True, transform=transform_train)
     test_dataset = torchvision.datasets.CIFAR100(root="./data", train=False, download=True, transform=transform_test)
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    test_loader = torch.utils.data.DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=2)
 
-    ################
-    model = VGG16(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value).to(device)
+    model = VGG16(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value, activation=args.activation).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(BETA1, BETA2), eps=EPSILON, weight_decay=WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1) ###
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4) ## SGD
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
     best_acc = 0.0
-    for epoch in range(EPOCHS):
+    for epoch in range(args.num_epochs):
+        logger.info(f"Epoch {epoch + 1}/{args.num_epochs}")
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device, writer, epoch)
         val_loss, val_acc = evaluate(model, test_loader, criterion, device, writer, epoch)
 
@@ -261,7 +282,8 @@ def main(args: argparse.Namespace) -> None:
         writer.add_scalar("Test/Accuracy", val_acc, epoch)
 
         writer.add_histogram("Model/Weights", model.fc.weight, epoch)
-
+        
+        
         scheduler.step()
         if (epoch+1) % 10 == 0:
                 torch.save(model.state_dict(), f"{experiment_name}_{epoch+1}.pth")
@@ -270,7 +292,7 @@ def main(args: argparse.Namespace) -> None:
             best_acc = val_acc
             torch.save(model.state_dict(), f"{experiment_name}_best.pth")
 
-        logger.info(f"Epoch [{epoch + 1}/{EPOCHS}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
+        logger.info(f"Epoch [{epoch + 1}/{args.num_epochs}]: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | "
                     f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
         
         wandb.log({
@@ -298,7 +320,12 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_rp", type=bool, default=False)
-    parser.add_argument("--lambda_value", type=float, default=None)
+    parser.add_argument("--lambda_value", type=float, default=0.01)
+    parser.add_argument("--learning_rate", type=float, default=0.01)
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--activation", type=str, default="relu")
+    parser.add_argument("--num_epochs", type=int, default=200)
+
     args = parser.parse_args()
     main(args)
 
