@@ -36,7 +36,7 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     """
     experiment_name = "VGG16_CIFAR100"
     if args.use_rp:
-        experiment_name += f"_RP_lambda_{args.lambda_value}_lr{args.learning_rate}_bs{args.batch_size}_activation{args.activation}"
+        experiment_name += f"_RP_lambda_{args.lambda_value}_lr{args.lr}_bs{args.batch_size}_activation{args.activation}"
     return experiment_name
 
 ## Actually, RM
