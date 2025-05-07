@@ -70,7 +70,7 @@ class RanPACLayer(nn.Module):
         self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) 
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
 
-        self.sqrt_dim = math.sqrt(input_dim)
+        self.sqrt_dim = math.sqrt(float(input_dim))
         self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -83,7 +83,10 @@ class RanPACLayer(nn.Module):
         Returns:
             torch.Tensor: Transformed tensor.
         """
+        print(x.unique())
         x = self.projection(x) * self.lambda_param * self.sqrt_dim
+        print(self.lambda_param * self.sqrt_dim)
+        print(x.unique())
 
         if self.activation == "relu":  
             x = nn.functional.relu(x)
@@ -332,7 +335,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_rp", type=bool, default=False)
     parser.add_argument("--lambda_value", type=float, default=0.01)
-    parser.add_argument("--lr", type=float, default=0.1)
+    parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--activation", type=str, default="relu")
     parser.add_argument("--num_epochs", type=int, default=200)
