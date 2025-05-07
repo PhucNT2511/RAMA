@@ -124,7 +124,7 @@ class VGG16(nn.Module):
         num_features = self.model.classifier[6].in_features  
         self.use_rp = use_rp
         if use_rp:          
-            self.rp = RanPACLayer(num_features, num_features, lambda_value, activation=activation)  
+            self.rp = RanPACLayer(num_features, num_features, lambda_value=lambda_value, activation=activation)  
             self.fc = nn.Linear(num_features , num_classes) 
         else:
             self.fc = nn.Linear(num_features, num_classes) 
@@ -332,7 +332,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_rp", type=bool, default=False)
     parser.add_argument("--lambda_value", type=float, default=0.01)
-    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--activation", type=str, default="relu")
     parser.add_argument("--num_epochs", type=int, default=200)
