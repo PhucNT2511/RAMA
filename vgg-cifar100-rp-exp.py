@@ -12,7 +12,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.models import vgg16
 import math
 from tqdm import tqdm
-import numpy as np  
+import numpy as np 
+import random 
 
 import wandb
 
@@ -222,6 +223,16 @@ def evaluate(model: nn.Module, val_loader: torch.utils.data.DataLoader, criterio
 
     return epoch_loss, epoch_acc
 
+def set_seed(seed):
+    """Set random seeds for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
 
 def main(args: argparse.Namespace) -> None:
     """
@@ -230,6 +241,8 @@ def main(args: argparse.Namespace) -> None:
     Args:
         args (argparse.Namespace): Command-line arguments.
     """
+    set_seed(42)  # Set a random seed for reproducibility
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
