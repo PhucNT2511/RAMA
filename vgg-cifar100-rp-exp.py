@@ -11,7 +11,8 @@ import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.models import vgg16
 import math
-
+from tqdm import tqdm
+import numpy as np  
 
 import wandb
 
@@ -165,7 +166,7 @@ def train_one_epoch(model: nn.Module, train_loader: torch.utils.data.DataLoader,
     """
     model.train()
     running_loss, correct, total = 0.0, 0, 0
-    for batch_idx, (inputs, labels) in enumerate(train_loader):
+    for batch_idx, (inputs, labels) in tqdm(enumerate(train_loader)):
         inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -283,7 +284,6 @@ def main(args: argparse.Namespace) -> None:
         writer.add_scalar("Test/Accuracy", val_acc, epoch)
 
         writer.add_histogram("Model/Weights", model.fc.weight, epoch)
-        
         
         scheduler.step()
         if (epoch+1) % 10 == 0:
