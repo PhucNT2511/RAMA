@@ -294,7 +294,6 @@ def main(args: argparse.Namespace) -> None:
         writer.add_scalar("Test/Loss", val_loss, epoch)
         writer.add_scalar("Test/Accuracy", val_acc, epoch)
 
-        writer.add_histogram("Model/Weights", model.fc.weight, epoch)
         
         scheduler.step()
         if (epoch+1) % 10 == 0:
