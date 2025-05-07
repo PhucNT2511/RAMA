@@ -140,11 +140,9 @@ class VGG16(nn.Module):
             torch.Tensor: Output tensor.
         """
         x = torch.flatten(self.features(x), 1) 
+        x = self.features2(x)
         if self.use_rp:
-            x = self.features2(x)
             x = self.rp(x)
-        else:
-            x = self.features2(x)
         return self.fc(x)
 
 
