@@ -51,7 +51,7 @@ class RanPACLayer(nn.Module):
         lambda_value (Optional[float]): Lambda scaling value for the projection matrix.
         norm_type (str): Normalization type, either "batch" or "layer".
     """
-    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch", activation: str = "relu"):
+    def __init__(self, input_dim: int, output_dim: int, lambda_value: Optional[float] = None, norm_type: str = "batch", activation: str = "relu", rama_type: str = "gaussian", p: float = 0.5):
         """
         Initialize the RanPACLayer.
 
@@ -63,9 +63,14 @@ class RanPACLayer(nn.Module):
         """ 
         super(RanPACLayer, self).__init__()
 
-        self.projection = nn.Linear(input_dim, output_dim, bias=False) 
-        self.projection.weight.requires_grad = False  
-        nn.init.normal_(self.projection.weight, mean=0, std=1.0) 
+        if rama_type == "gaussian":
+            self.projection = nn.Linear(input_dim, output_dim, bias=False) 
+            self.projection.weight.requires_grad = False  
+            nn.init.normal_(self.projection.weight, mean=0, std=1.0) 
+        elif rama_type == "bernoulli":
+            self.projection = nn.Linear(input_dim, output_dim, bias=False) 
+            self.projection.weight.requires_grad = False  
+            nn.init.bernoulli_(self.projection.weight, p=p)
 
         self.lambda_param = lambda_value if lambda_value else nn.Parameter(torch.FloatTensor([1e-3])) 
         self.norm = nn.BatchNorm1d(output_dim) if norm_type == "batch" else nn.LayerNorm(output_dim)
@@ -99,7 +104,7 @@ class RanPACLayer(nn.Module):
             x = torch.nn.functional.silu(x)
         elif self.activation == "gelu":
             x = torch.nn.functional.gelu(x)
-        #x = self.norm(x)
+        x = self.norm(x)
         return x
 
 ## VGG16
@@ -342,6 +347,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--activation", type=str, default="relu")
     parser.add_argument("--num_epochs", type=int, default=200)
+    parser.add_argument("--rama_type", type=str, default="gaussian")
+    parser.add_argument("--p", type=float, default=0.5)  # Probability for Bernoulli
 
     args = parser.parse_args()
     main(args)
