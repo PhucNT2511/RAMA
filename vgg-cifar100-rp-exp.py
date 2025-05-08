@@ -262,15 +262,15 @@ def main(args: argparse.Namespace) -> None:
 
     # Transforms & Dataset
     transform_train = transforms.Compose([
-#        transforms.Resize(224),
-        transforms.RandomCrop(32, padding=4), 
+        transforms.Resize(224),
+        transforms.RandomCrop(224, padding=8), 
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
     ])
 
     transform_test = transforms.Compose([
-#        transforms.Resize(224),
+        transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
     ])
@@ -287,8 +287,7 @@ def main(args: argparse.Namespace) -> None:
         model.parameters(), 
         lr=args.lr, 
         momentum=0.9, 
-        weight_decay=5e-4,
-        nesterov=True) ## SGD
+        weight_decay=5e-4) ## SGD
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
     best_acc = 0.0
