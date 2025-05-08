@@ -83,10 +83,9 @@ class RanPACLayer(nn.Module):
         Returns:
             torch.Tensor: Transformed tensor.
         """
-        print(x.unique())
+ 
         x = self.projection(x) * self.lambda_param * self.sqrt_dim
-        print(self.lambda_param * self.sqrt_dim)
-        print(x.unique())
+
 
         if self.activation == "relu":  
             x = nn.functional.relu(x)
