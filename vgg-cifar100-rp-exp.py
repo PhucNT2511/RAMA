@@ -283,7 +283,12 @@ def main(args: argparse.Namespace) -> None:
 
     model = VGG16(num_classes=100, use_rp=args.use_rp, lambda_value=args.lambda_value, activation=args.activation).to(device)
     criterion = nn.CrossEntropyLoss() ## cross-entropy
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4) ## SGD
+    optimizer = optim.SGD(
+        model.parameters(), 
+        lr=args.lr, 
+        momentum=0.9, 
+        weight_decay=5e-4,
+        nesterov=True) ## SGD
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
     best_acc = 0.0
