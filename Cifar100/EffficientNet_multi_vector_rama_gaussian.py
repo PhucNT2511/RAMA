@@ -273,6 +273,9 @@ class Trainer:
                  device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None):
+        if torch.cuda.device_count() > 1:
+            print(f"==> Using {torch.cuda.device_count()} GPUs for training")
+            model = nn.DataParallel(model)
         self.model = model
         self.trainloader = trainloader
         self.testloader = testloader
