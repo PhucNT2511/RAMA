@@ -440,15 +440,27 @@ class Trainer:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 
                 # Use the forward pass that returns features
+                
+
                 if self.use_rama:
-                    outputs, before_features, after_features = self.model.forward_with_features(inputs, lambda_value)
+                    if isinstance(self.model, nn.DataParallel):
+                        outputs, before_features, after_features = \
+                            self.model.module.forward_with_features(inputs, lambda_value)
+                    else:
+                        outputs, before_features, after_features = \
+                            self.model.forward_with_features(inputs, lambda_value)
                     if before_features is not None and after_features is not None:
                         features_original.append(before_features.cpu())
                         features_after_rama.append(after_features.cpu())
                         class_labels.append(targets.cpu())
                 else:
                     # outputs = self.model.forward(inputs, lambda_value)
-                    outputs, before_features, after_features = self.model.forward_with_features(inputs, None)
+                    if isinstance(self.model, nn.DataParallel):
+                        outputs, before_features, after_features = \
+                            self.model.module.forward_with_features(inputs, None)
+                    else:
+                        outputs, before_features, after_features = \
+                            self.model.forward_with_features(inputs, None)
                     if before_features is not None and after_features is not None:
                         features_original.append(before_features.cpu())
                         features_after_rama.append(after_features.cpu())
