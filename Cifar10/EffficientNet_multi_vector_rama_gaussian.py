@@ -273,6 +273,10 @@ class Trainer:
                  device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None):
+        if torch.cuda.device_count() > 1:
+            print(f"==> Using {torch.cuda.device_count()} GPUs for training")
+            model = nn.DataParallel(model)
+        self.model = model
         self.model = model
         self.trainloader = trainloader
         self.testloader = testloader
@@ -436,16 +440,25 @@ class Trainer:
             for batch_idx, (inputs, targets) in enumerate(self.testloader):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 
-                # Use the forward pass that returns features
                 if self.use_rama:
-                    outputs, before_features, after_features = self.model.forward_with_features(inputs, lambda_value)
+                    if isinstance(self.model, nn.DataParallel):
+                        outputs, before_features, after_features = \
+                            self.model.module.forward_with_features(inputs, lambda_value)
+                    else:
+                        outputs, before_features, after_features = \
+                            self.model.forward_with_features(inputs, lambda_value)
                     if before_features is not None and after_features is not None:
                         features_original.append(before_features.cpu())
                         features_after_rama.append(after_features.cpu())
                         class_labels.append(targets.cpu())
                 else:
                     # outputs = self.model.forward(inputs, lambda_value)
-                    outputs, before_features, after_features = self.model.forward_with_features(inputs, None)
+                    if isinstance(self.model, nn.DataParallel):
+                        outputs, before_features, after_features = \
+                            self.model.module.forward_with_features(inputs, None)
+                    else:
+                        outputs, before_features, after_features = \
+                            self.model.forward_with_features(inputs, None)
                     if before_features is not None and after_features is not None:
                         features_original.append(before_features.cpu())
                         features_after_rama.append(after_features.cpu())
