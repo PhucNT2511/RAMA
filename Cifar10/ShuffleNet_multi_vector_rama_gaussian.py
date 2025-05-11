@@ -122,7 +122,11 @@ class ShuffleNet(nn.Module):
         self.backbone = shufflenet_v2_x1_0(weights=None)
         self.feature_dim = self.backbone.fc.in_features
 
-        self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
+        self.features_1 = nn.Sequential(
+            *list(self.backbone.children())[:-1],
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),            
+        ) 
         
         # Create Gaussian RAMA layer before the linear layer in the network
         if use_rama:
@@ -137,9 +141,7 @@ class ShuffleNet(nn.Module):
 
         # Linear
         self.fc = nn.Linear(self.feature_dim, num_classes)
-        self.features_2 = nn.Sequential(
-            self.fc
-        )
+        self.features_2 = self.fc
         
         # Initialize hooks for feature extraction
         self.hooks = []
@@ -693,7 +695,7 @@ class Trainer:
 
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "ShuffleNet_V2"
+    exp_name = "Cifar10_ShuffleNet_V2"
     exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
