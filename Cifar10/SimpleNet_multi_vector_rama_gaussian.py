@@ -655,7 +655,7 @@ class Trainer:
                         self.bayesian_optimizer.set_bounds(
                             new_bounds={"lambda_value": (new_min, self.bayes_opt_config["lambda_max"])}
                         )
-            self.scheduler.step()
+            #self.scheduler.step()
             
             # Log metrics.
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
