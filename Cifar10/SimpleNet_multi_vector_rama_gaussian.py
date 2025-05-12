@@ -821,7 +821,11 @@ def main():
         momentum=0.9, 
         weight_decay=5e-4
     )
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, 
+        T_max=args.epochs, 
+        eta_min=0
+    )
     
     # Resume from checkpoint if specified
     start_epoch = 0
