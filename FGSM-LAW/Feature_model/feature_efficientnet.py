@@ -35,15 +35,17 @@ class GaussianRAMALayer(nn.Module):
         if use_normalization:
             self.norm = nn.LayerNorm(output_dim)
 
-    def forward(self, x, lambda_value):
+    def forward(self, x, lambda_value=None):
         """
         Forward pass through the Gaussian RAMA layer.
         
         Args:
             x: Input tensor
-            lambda_value: lambda
+            lambda_value: Optional scaling factor for the output.
         """
         
+        if lambda_value is not None:
+            self.lambda_value = lambda_value
         
         out = x @ self.projection
 
@@ -120,7 +122,7 @@ class Feature_EfficientNet(nn.Module):
         self.before_rama_features = None
         self.after_rama_features = None
 
-    def forward(self, x, lambda_value):
+    def forward(self, x, lambda_value=None):
         """Forward pass through the EfficientNet-B2 model with Gaussian RAMA layers."""
         out = self.features_1(x)
 
