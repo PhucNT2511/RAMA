@@ -252,12 +252,13 @@ class Trainer:
         testloader (DataLoader): Testing data loader.
         criterion (nn.Module): Loss function.
         optimizer (optim.Optimizer): Optimizer.
+        scheduler (optim.lr_scheduler): Learning rate scheduler.
         device (torch.device): Device to use for training.
         checkpoint_dir (str): Directory to save checkpoints.
         bayes_opt_config (dict): Configuration for Bayesian optimization.
         neptune_run: Neptune.ai run instance
     """
-    def __init__(self, model, trainloader, testloader, criterion, optimizer, 
+    def __init__(self, model, trainloader, testloader, criterion, optimizer, scheduler,
                  device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None):
@@ -270,6 +271,7 @@ class Trainer:
         self.testloader = testloader
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.best_acc = 0
@@ -653,7 +655,8 @@ class Trainer:
                         self.bayesian_optimizer.set_bounds(
                             new_bounds={"lambda_value": (new_min, self.bayes_opt_config["lambda_max"])}
                         )
-
+            self.scheduler.step()
+            
             # Log metrics.
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
             logger.info(f"Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%")
@@ -818,6 +821,7 @@ def main():
         momentum=0.9, 
         weight_decay=5e-4
     )
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
     
     # Resume from checkpoint if specified
     start_epoch = 0
@@ -868,6 +872,7 @@ def main():
         testloader=testloader,
         criterion=criterion,
         optimizer=optimizer,
+        scheduler=scheduler,
         device=device,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
