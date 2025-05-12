@@ -656,7 +656,7 @@ class Trainer:
                             new_bounds={"lambda_value": (new_min, self.bayes_opt_config["lambda_max"])}
                         )
 
-            self.scheduler.step()
+            # self.scheduler.step()
 
             # Log metrics.
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
@@ -822,6 +822,7 @@ def main():
         momentum=0.9, 
         weight_decay=5e-4
     )
+    
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer, 
         T_max=args.epochs, 
