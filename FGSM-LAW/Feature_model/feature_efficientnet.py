@@ -77,7 +77,7 @@ class Feature_EfficientNet(nn.Module):
         use_rama (bool): Whether to use RAMA layers. Default: False.
         rama_config (dict): Configuration for RAMA layers. Default: None.
     """
-    def __init__(self, num_classes=10, use_rama=False, rama_config=None):
+    def __init__(self, num_classes=10, use_rama=False, rama_config=None, rama_type='gaussian'):
         super().__init__()
         
         self.use_rama = use_rama
