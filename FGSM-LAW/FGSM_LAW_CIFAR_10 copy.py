@@ -283,7 +283,7 @@ def main():
     elif args.model == "PreActResNest18":
         model = PreActResNet18()
     elif args.model == "EfficientNet":
-        model_test = Feature_EfficientNet(
+        model = Feature_EfficientNet(
             use_rama=args.use_rama,
             rama_config=rama_config,
             rama_type='gaussian'
