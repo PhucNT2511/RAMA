@@ -196,7 +196,7 @@ def LabelSmoothLoss(input, target):
     loss = (-target * log_prob).sum(dim=-1).mean()
     return loss
 class EMA(object):
-    def __init__(self, model, alpha=0.999, buffer_ema=True):
+    def __init__(self, model, alpha=0.9, buffer_ema=True):
         self.step = 0
         self.model = copy.deepcopy(model)
         self.alpha = alpha
