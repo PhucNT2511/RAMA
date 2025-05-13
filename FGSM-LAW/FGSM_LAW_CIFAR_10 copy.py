@@ -167,7 +167,7 @@ def LabelSmoothLoss(input, target):
     loss = (-target * log_prob).sum(dim=-1).mean()
     return loss
 class EMA(object):
-    def __init__(self, model, alpha=0.999, buffer_ema=True):
+    def __init__(self, model, alpha=0.0, buffer_ema=True):
         self.step = 0
         self.model = copy.deepcopy(model)
         self.alpha = alpha
@@ -460,7 +460,7 @@ def main():
                 rama_config=rama_config,
             ).cuda()
 
-        model_test.load_state_dict(model.model.state_dict())
+        model_test.load_state_dict(teacher_model.model.state_dict())
         model_test.float()
         model_test.eval()
         eval_epsilon = (args.epsilon / 255.) / std
