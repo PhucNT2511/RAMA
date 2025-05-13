@@ -124,7 +124,7 @@ class feature_EfficientNet(nn.Module):
     def forward(self, x, lambda_value=None):
         """Forward pass through the EfficientNet-B2 model with Gaussian RAMA layers."""
         out = self.features_1(x)
-        out = torch.flatten(out, 1)
+        out = out.view(out.size(0), -1)
         feature_out = out
 
         # Store features before RAMA for evaluation
