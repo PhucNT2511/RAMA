@@ -15,6 +15,7 @@ from torch.autograd import Variable
 # from preact_resnet import PreActResNet18
 from utils import *
 from Feature_model.feature_resnet import *
+from Feature_model.feature_efficientnet import *
 from torchvision import datasets, transforms
 import torch.nn.functional as F
 import torch.utils.data as data
@@ -335,7 +336,6 @@ def main():
             use_rama=args.use_rama,
             rama_config=rama_config,
             rama_positions=rama_positions,
-            rama_type='gaussian'
         ).cuda()
     model = model.cuda()
     model.train()
@@ -499,7 +499,6 @@ def main():
                 use_rama=args.use_rama,
                 rama_config=rama_config,
                 rama_positions=rama_positions,
-                rama_type='gaussian'
             ).cuda()
 
         model_test.load_state_dict(teacher_model.model.state_dict())

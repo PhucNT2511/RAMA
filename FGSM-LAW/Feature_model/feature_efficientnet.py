@@ -93,7 +93,6 @@ class Feature_EfficientNet(nn.Module):
                 }
             
         self.backbone = efficientnet_b2(weights=None)
-        ### Because original model works well with 260x260 images, so if want to train in 32x32, should change in the 1st conv layer.
         self.feature_dim = self.backbone.classifier[1].in_features
 
         self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
@@ -125,10 +124,8 @@ class Feature_EfficientNet(nn.Module):
     def forward(self, x, lambda_value=None):
         """Forward pass through the EfficientNet-B2 model with Gaussian RAMA layers."""
         out = self.features_1(x)
-
         out = torch.flatten(out, 1)
         feature_out = out
-
 
         # Store features before RAMA for evaluation
         if self.use_rama:
