@@ -85,7 +85,7 @@ def get_args():
     parser.add_argument('--epochs', default=110, type=int)
     parser.add_argument('--lr-schedule', default='multistep', choices=['cyclic', 'multistep'])
     parser.add_argument('--lr-min', default=0., type=float)
-    parser.add_argument('--lr-max', default=0.01, type=float)
+    parser.add_argument('--lr-max', default=0.1, type=float)
     parser.add_argument('--weight-decay', default=5e-4, type=float)
     parser.add_argument('--momentum', default=0.9, type=float)
     parser.add_argument('--model', default='ResNet18', type=str, help='model name')
@@ -399,7 +399,7 @@ def main():
                 teacher_model.update_params(model)
                 teacher_model.apply_shadow()
 
-            #scheduler.step()
+            scheduler.step()
             batch_end_time = time.time()
             epoch_time += batch_end_time - batch_start_time
 
