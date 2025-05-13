@@ -443,9 +443,9 @@ def main():
             adv_acc = (output.max(1)[1] == y).sum().item()
             clean_acc = (adv_output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
-            #if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
-            teacher_model.update_params(model)
-            teacher_model.apply_shadow()
+            if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
+                teacher_model.update_params(model)
+                teacher_model.apply_shadow()
 
             scheduler.step()
             batch_end_time = time.time()

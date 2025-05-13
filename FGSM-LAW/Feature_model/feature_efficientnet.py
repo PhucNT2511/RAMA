@@ -70,7 +70,7 @@ class GaussianRAMALayer(nn.Module):
             out = torch.nn.functional.gelu(out)
         return out
 
-class Feature_EfficientNet(nn.Module):
+class feature_EfficientNet(nn.Module):
     """
     Modified EfficientNet-B2 architecture with Gaussian RAMA layers at multiple positions.
     
@@ -139,3 +139,6 @@ class Feature_EfficientNet(nn.Module):
         out = self.features_2(out)
         
         return out, feature_out
+    
+def Feature_EfficientNet(num_classes=10, use_rama=False, rama_config=None):
+    return feature_EfficientNet(num_classes, use_rama, rama_config)
