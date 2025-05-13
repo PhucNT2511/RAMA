@@ -118,12 +118,13 @@ class SE(nn.Module):
         super(SE, self).__init__()
         self.se1 = nn.Conv2d(in_channels, se_channels,
                              kernel_size=1, bias=True)
+        self.swish = nn.SiLU()
         self.se2 = nn.Conv2d(se_channels, in_channels,
                              kernel_size=1, bias=True)
 
     def forward(self, x):
         out = F.adaptive_avg_pool2d(x, (1, 1))
-        out = swish(self.se1(out))
+        out = self.swish(self.se1(out))
         out = self.se2(out).sigmoid()
         out = x * out
         return out
