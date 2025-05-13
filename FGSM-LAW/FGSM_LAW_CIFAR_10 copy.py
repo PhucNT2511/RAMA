@@ -394,6 +394,12 @@ def main():
             adv_acc = (output.max(1)[1] == y).sum().item()
             clean_acc = (adv_output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
+
+             # === DEBUG EMA RATIO ===
+            ratio = adv_acc / (clean_acc + 1e-10)
+            print(f"[Debug EMA] adv/clean = {ratio:.3f}", 
+                "-> update EMA" if ratio < args.EMA_value else "-> skip EMA")
+
             if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
                 teacher_model.update_params(model)
                 teacher_model.apply_shadow()
