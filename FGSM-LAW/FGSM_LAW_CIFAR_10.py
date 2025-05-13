@@ -332,10 +332,9 @@ def main():
             rama_type='bernoulli'
         )
     elif args.model == "EfficientNet":
-        model_test = Feature_EfficientNet(
+        model = Feature_EfficientNet(
             use_rama=args.use_rama,
             rama_config=rama_config,
-            rama_positions=rama_positions,
         ).cuda()
     model = model.cuda()
     model.train()
@@ -498,7 +497,6 @@ def main():
             model_test = Feature_EfficientNet(
                 use_rama=args.use_rama,
                 rama_config=rama_config,
-                rama_positions=rama_positions,
             ).cuda()
 
         model_test.load_state_dict(teacher_model.model.state_dict())
