@@ -460,7 +460,7 @@ def main():
                 rama_config=rama_config,
             ).cuda()
 
-        model_test.load_state_dict(teacher_model.model.state_dict())
+        model_test.load_state_dict(model.model.state_dict())
         model_test.float()
         model_test.eval()
         eval_epsilon = (args.epsilon / 255.) / std
