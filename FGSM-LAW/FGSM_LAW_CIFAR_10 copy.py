@@ -404,9 +404,9 @@ def main():
             
             print('adv_acc:', adv_acc)
             print('clean_acc:', clean_acc)
-            if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
-                teacher_model.update_params(model)
-                teacher_model.apply_shadow()
+            #if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
+            teacher_model.update_params(model)
+            teacher_model.apply_shadow()
 
             scheduler.step()
             batch_end_time = time.time()
