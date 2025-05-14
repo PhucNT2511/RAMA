@@ -21,8 +21,8 @@ import torch.nn.functional as F
 import torch.utils.data as data
 from tqdm import tqdm
 
-NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
-NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
+NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PROJECT", default=None)
+NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN", default=None)
 
 
 def get_experiment_name(args):
@@ -335,7 +335,8 @@ def main():
         model = Feature_EfficientNet(
             use_rama=args.use_rama,
             rama_config=rama_config,
-        ).cuda()
+        )
+
     model = model.cuda()
     model.train()
     teacher_model = EMA(model)
@@ -409,7 +410,7 @@ def main():
 
             adv_output, ori_fea_output = model(X)
 
-            adv_output = torch.nn.Softmax(dim=1)(adv_output) ################
+            adv_output = torch.nn.Softmax(dim=1)(adv_output)
             ori_fea_output = torch.nn.Softmax(dim=1)(ori_fea_output)
 
             init_train_loss += loss.item() * y.size(0)
@@ -422,13 +423,13 @@ def main():
             delta.data[:X.size(0)] = clamp(delta[:X.size(0)], lower_limit - X, upper_limit - X)
             delta = delta.detach()
             ori_output,fea_output = model(X + delta[:X.size(0)])
-            output = torch.nn.Softmax(dim=1)(ori_output) ###############
+            output = torch.nn.Softmax(dim=1)(ori_output)
             fea_output = torch.nn.Softmax(dim=1)(fea_output)
 
             loss_fn = torch.nn.MSELoss(reduce=True, size_average=True)
             label_smoothing = Variable(torch.tensor(_label_smoothing(y, args.factor)).cuda())
 
-            loss = LabelSmoothLoss(ori_output, label_smoothing.float()) + args.lamda * (loss_fn(output.float(), adv_output.float()) + loss_fn(fea_output.float(), ori_fea_output.float()))/(loss_fn((X + delta[:X.size(0)]).float(), (X).float())+0.125)
+            loss = LabelSmoothLoss(ori_output, label_smoothing.float()) + args.lamda * (loss_fn(output.float(), adv_output.float())+loss_fn(fea_output.float(), ori_fea_output.float()))/(loss_fn((X + delta[:X.size(0)]).float(), (X).float())+0.125)
 
             opt.zero_grad()
             # with amp.scale_loss(loss, opt) as scaled_loss:
@@ -443,6 +444,9 @@ def main():
             adv_acc = (output.max(1)[1] == y).sum().item()
             clean_acc = (adv_output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
+            
+            # logger.info("*"*300)
+            # logger.info(f"Epoch {epoch}, Batch {i}, Loss: {loss.item()}, Train Acc: {train_acc / train_n}, Adv Acc: {adv_acc / train_n}, Clean Acc: {clean_acc / train_n}, Ratio: {adv_acc / (clean_acc + 1e-10)}, EMA: {args.EMA_value}")
             if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
                 teacher_model.update_params(model)
                 teacher_model.apply_shadow()
@@ -496,7 +500,7 @@ def main():
         elif args.model == "EfficientNet":
             model_test = Feature_EfficientNet(
                 use_rama=args.use_rama,
-                rama_config=rama_config,
+                rama_config=rama_config
             ).cuda()
 
         model_test.load_state_dict(teacher_model.model.state_dict())
