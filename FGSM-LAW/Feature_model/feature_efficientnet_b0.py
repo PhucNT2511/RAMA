@@ -239,7 +239,7 @@ class feature_EfficientNet(nn.Module):
             self.after_rama_features = out.detach().clone()
 
         out = self.linear(out)
-        return out
+        return out, feature_out
 
 def Feature_EfficientNetB0(num_classes=10, use_rama=False, rama_config=None):
     cfg = {
