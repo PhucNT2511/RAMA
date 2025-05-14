@@ -15,7 +15,7 @@ from torch.autograd import Variable
 # from preact_resnet import PreActResNet18
 from utils import *
 from Feature_model.feature_resnet import *
-from Feature_model.feature_efficientnet import *
+from Feature_model.feature_efficientnet_b0 import *
 from torchvision import datasets, transforms
 import torch.nn.functional as F
 import torch.utils.data as data
@@ -282,11 +282,17 @@ def main():
         )
     elif args.model == "PreActResNest18":
         model = PreActResNet18()
-    elif args.model == "EfficientNet":
-        model = Feature_EfficientNet(
+    elif args.model == "EfficientNetB0":
+        model = Feature_EfficientNetB0(
             use_rama=args.use_rama,
             rama_config=rama_config,
         ).cuda()
+    elif args.model == "EfficientNetB2":
+        model = Feature_EfficientNetB2(
+            use_rama=args.use_rama,
+            rama_config=rama_config,
+        ).cuda()
+    
     model = model.cuda()
     model.train()
     teacher_model = EMA(model)
@@ -454,8 +460,13 @@ def main():
                 rama_positions='final',
                 rama_type='bernoulli'
             ).cuda()
-        elif args.model == "EfficientNet":
-            model_test = Feature_EfficientNet(
+        elif args.model == "EfficientNetB0":
+            model_test = Feature_EfficientNetB0(
+                use_rama=args.use_rama,
+                rama_config=rama_config,
+            ).cuda()
+        elif args.model == "EfficientNetB2":
+            model_test = Feature_EfficientNetB2(
                 use_rama=args.use_rama,
                 rama_config=rama_config,
             ).cuda()

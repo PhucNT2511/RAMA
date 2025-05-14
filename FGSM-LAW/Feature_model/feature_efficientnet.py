@@ -130,9 +130,6 @@ class Feature_EfficientNet(nn.Module):
         # Store features before RAMA for evaluation
         if self.use_rama:
             self.before_rama_features = out.detach().clone()
-            
-        # Apply RAMA before final classification (original position)
-        if self.use_rama:
             out = self.rama_linearLayer(out, lambda_value)
             self.after_rama_features = out.detach().clone()
 
