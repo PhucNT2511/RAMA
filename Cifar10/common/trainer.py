@@ -5,6 +5,7 @@ from tqdm import tqdm
 from bayes_opt import BayesianOptimization, acquisition
 
 from .metrics import calculate_feature_metrics
+from .attacks import fgsm_attack, pgd_attack
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,20 @@ class Trainer:
         scheduler: Learning rate scheduler
         neptune_run: Neptune.ai run instance
         writer: TensorBoard SummaryWriter
+        eval_fgsm (bool): Whether to evaluate with FGSM attack.
+        eval_pgd (bool): Whether to evaluate with PGD attack.
+        adv_epsilon (float): Epsilon for adversarial attacks.
+        pgd_alpha (float): Alpha for PGD attack.
+        pgd_iter (int): Number of iterations for PGD attack.
+        adversarial_training_attack (str): Type of attack for adversarial training (None, 'fgsm', 'pgd').
     """
     def __init__(self, model, trainloader, testloader, criterion, optimizer, 
                  device, checkpoint_dir, bayes_opt_config=None, use_rama=False,
                  use_hyperparameter_optimization=False, scheduler=None,
-                 neptune_run=None, writer=None):
+                 neptune_run=None, writer=None,
+                 eval_fgsm=False, eval_pgd=False, adv_epsilon=8/255, 
+                 pgd_alpha=2/255, pgd_iter=10,
+                 adversarial_training_attack=None):
         self.model = model
         self.trainloader = trainloader
         self.testloader = testloader
@@ -47,6 +57,14 @@ class Trainer:
         self.best_p = None
         self.scheduler = scheduler
         
+        # Store adversarial evaluation parameters
+        self.eval_fgsm = eval_fgsm
+        self.eval_pgd = eval_pgd
+        self.adv_epsilon = adv_epsilon
+        self.pgd_alpha = pgd_alpha
+        self.pgd_iter = pgd_iter
+        self.adversarial_training_attack = adversarial_training_attack
+
         if self.use_rama and self.use_hyperparameter_optimization:
             # Default Bayesian optimization configuration
             self.bayes_opt_config = bayes_opt_config
@@ -126,8 +144,24 @@ class Trainer:
         pbar = tqdm(self.trainloader, desc="Training")
         for batch_idx, (inputs, targets) in enumerate(pbar):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
+            
+            # If adversarial training is enabled, generate adversarial examples
+            current_inputs = inputs
+            if self.adversarial_training_attack == 'fgsm':
+                # Ensure model is in eval mode for attack generation, then back to train
+                self.model.eval()
+                current_inputs = fgsm_attack(self.model, inputs, targets, self.adv_epsilon, self.device)
+                self.model.train()
+            elif self.adversarial_training_attack == 'pgd':
+                # Ensure model is in eval mode for attack generation, then back to train
+                self.model.eval()
+                current_inputs = pgd_attack(self.model, inputs, targets, 
+                                            self.adv_epsilon, self.pgd_alpha, self.pgd_iter, self.device)
+                self.model.train()
+            
             self.optimizer.zero_grad()
-            outputs = self.model.forward(inputs, p_value=p_value)
+            # Use current_inputs (which may be adversarial) for the forward pass
+            outputs = self.model.forward(current_inputs, p_value=p_value)
             loss = self.criterion(outputs, targets)
             loss.backward()
             self.optimizer.step()
@@ -156,7 +190,7 @@ class Trainer:
         correct = 0
         total = 0
         with torch.no_grad():
-            pbar = tqdm(self.testloader, desc="Testing")
+            pbar = tqdm(self.testloader, desc="Testing (Clean)")
             for batch_idx, (inputs, targets) in enumerate(pbar):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 outputs = self.model.forward(inputs, p_value=p_value)
@@ -172,6 +206,81 @@ class Trainer:
                     'acc': 100. * correct / total
                 })
         return test_loss / len(self.testloader), 100. * correct / total
+
+    def evaluate_fgsm(self, p_value=None):
+        """
+        Evaluate the model on FGSM adversarial examples.
+        
+        Args:
+            p_value: Value for RAMA p parameter (if model uses it).
+
+        Returns:
+            tuple: (fgsm_loss, fgsm_accuracy)
+        """
+        self.model.eval()
+        fgsm_loss = 0.0
+        correct = 0
+        total = 0
+        pbar = tqdm(self.testloader, desc="Testing (FGSM)")
+        for batch_idx, (inputs, targets) in enumerate(pbar):
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
+            
+            # Generate FGSM adversarial examples
+            # Note: FGSM attack enables gradients, so no torch.no_grad() here for attack generation
+            adv_inputs = fgsm_attack(self.model, inputs, targets, self.adv_epsilon, self.device)
+            
+            with torch.no_grad(): # Disable gradients for evaluation pass
+                outputs = self.model.forward(adv_inputs, p_value=p_value)
+                loss = self.criterion(outputs, targets)
+                
+                fgsm_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+                
+                pbar.set_postfix({
+                    'loss': fgsm_loss / (batch_idx + 1),
+                    'acc': 100. * correct / total
+                })
+        return fgsm_loss / len(self.testloader), 100. * correct / total
+
+    def evaluate_pgd(self, p_value=None):
+        """
+        Evaluate the model on PGD adversarial examples.
+
+        Args:
+            p_value: Value for RAMA p parameter (if model uses it).
+            
+        Returns:
+            tuple: (pgd_loss, pgd_accuracy)
+        """
+        self.model.eval()
+        pgd_loss = 0.0
+        correct = 0
+        total = 0
+        pbar = tqdm(self.testloader, desc="Testing (PGD)")
+        for batch_idx, (inputs, targets) in enumerate(pbar):
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+            # Generate PGD adversarial examples
+            # Note: PGD attack enables gradients, so no torch.no_grad() here for attack generation
+            adv_inputs = pgd_attack(self.model, inputs, targets, 
+                                    self.adv_epsilon, self.pgd_alpha, self.pgd_iter, self.device)
+
+            with torch.no_grad(): # Disable gradients for evaluation pass
+                outputs = self.model.forward(adv_inputs, p_value=p_value)
+                loss = self.criterion(outputs, targets)
+                
+                pgd_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+                
+                pbar.set_postfix({
+                    'loss': pgd_loss / (batch_idx + 1),
+                    'acc': 100. * correct / total
+                })
+        return pgd_loss / len(self.testloader), 100. * correct / total
 
     def evaluate_p(self, p_value):
         """
@@ -311,9 +420,19 @@ class Trainer:
             # Train with best p
             train_loss, train_acc = self.train_one_epoch(p_value=self.best_p)
             
-            # Basic evaluation
+            # Basic evaluation (Clean Accuracy)
             test_loss, test_acc = self.evaluate(p_value=self.best_p)
             
+            # Adversarial Evaluation if enabled
+            fgsm_acc, pgd_acc = -1.0, -1.0 # Default if not evaluated
+            fgsm_loss, pgd_loss = -1.0, -1.0
+            if test_acc > self.best_acc and (epoch % 15 == 0 or epoch == epochs - 1):
+                if self.eval_fgsm:
+                    fgsm_loss, fgsm_acc = self.evaluate_fgsm(p_value=self.best_p)
+
+                if self.eval_pgd:
+                    pgd_loss, pgd_acc = self.evaluate_pgd(p_value=self.best_p)
+
             # Detailed evaluation with feature metrics (once every 5 epochs to save time)
             if epoch % 5 == 0 or epoch == epochs - 1:
                 metrics = self.evaluate_with_metrics(p_value=self.best_p)
@@ -371,7 +490,12 @@ class Trainer:
 
             # Log metrics
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
-            logger.info(f"Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%")
+            logger.info(f"Test Loss: {test_loss:.4f} | Test Acc (Clean): {test_acc:.2f}%")
+            if self.eval_fgsm:
+                logger.info(f"FGSM Loss: {fgsm_loss:.4f} | FGSM Acc: {fgsm_acc:.2f}%")
+            if self.eval_pgd:
+                logger.info(f"PGD Loss: {pgd_loss:.4f} | PGD Acc: {pgd_acc:.2f}%")
+
             if self.use_rama and self.use_hyperparameter_optimization:
                 logger.info(f"Current p value: {self.best_p:.6f}")
 
@@ -380,7 +504,13 @@ class Trainer:
                 self.neptune_run["Train/Loss"].append(train_loss)
                 self.neptune_run["Train/Accuracy"].append(train_acc)
                 self.neptune_run["Test/Loss"].append(test_loss)
-                self.neptune_run["Test/Accuracy"].append(test_acc)
+                self.neptune_run["Test/Accuracy"].append(test_acc) # Clean accuracy
+                if self.eval_fgsm:
+                    self.neptune_run["Test/FGSM_Loss"].append(fgsm_loss)
+                    self.neptune_run["Test/FGSM_Accuracy"].append(fgsm_acc)
+                if self.eval_pgd:
+                    self.neptune_run["Test/PGD_Loss"].append(pgd_loss)
+                    self.neptune_run["Test/PGD_Accuracy"].append(pgd_acc)
                 if self.use_rama and self.use_hyperparameter_optimization:
                     self.neptune_run["RAMA_P"].append(self.best_p)
 
@@ -389,7 +519,13 @@ class Trainer:
                 self.writer.add_scalar("Train/Loss", train_loss, epoch)
                 self.writer.add_scalar("Train/Accuracy", train_acc, epoch)
                 self.writer.add_scalar("Test/Loss", test_loss, epoch)
-                self.writer.add_scalar("Test/Accuracy", test_acc, epoch)
+                self.writer.add_scalar("Test/Accuracy", test_acc, epoch) # Clean accuracy
+                if self.eval_fgsm:
+                    self.writer.add_scalar("Test/FGSM_Loss", fgsm_loss, epoch)
+                    self.writer.add_scalar("Test/FGSM_Accuracy", fgsm_acc, epoch)
+                if self.eval_pgd:
+                    self.writer.add_scalar("Test/PGD_Loss", pgd_loss, epoch)
+                    self.writer.add_scalar("Test/PGD_Accuracy", pgd_acc, epoch)
                 if self.use_rama and self.use_hyperparameter_optimization:
                     self.writer.add_scalar("RAMA_P", self.best_p, epoch)
 
@@ -397,26 +533,22 @@ class Trainer:
             is_best = test_acc > self.best_acc
             if is_best:
                 self.best_acc = test_acc
-            
-            # Prepare checkpoint state
-            checkpoint_state = {
-                "epoch": epoch,
-                "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "best_acc": self.best_acc,
-                "best_p": self.best_p,
-            }
-            
-            # Add scheduler state if it exists
-            if self.scheduler:
-                checkpoint_state["scheduler_state_dict"] = self.scheduler.state_dict()
+                checkpoint_state = {
+                    "epoch": epoch,
+                    "model_state_dict": self.model.state_dict(),
+                    "optimizer_state_dict": self.optimizer.state_dict(),
+                    "best_acc": self.best_acc,
+                    "best_p": self.best_p,
+                }
+                # Add scheduler state if it exists
+                if self.scheduler:
+                    checkpoint_state["scheduler_state_dict"] = self.scheduler.state_dict()
+                self.save_checkpoint(checkpoint_state, is_best)
                 
-            self.save_checkpoint(checkpoint_state, is_best)
-            
-            # Save Bayesian optimization state
-            if self.use_rama and self.use_hyperparameter_optimization:
-                bayes_opt_path = os.path.join(self.checkpoint_dir, 'bayes_opt_state.json')
-                self.bayesian_optimizer.save_state(bayes_opt_path)
+                # Save Bayesian optimization state
+                if self.use_rama and self.use_hyperparameter_optimization:
+                    bayes_opt_path = os.path.join(self.checkpoint_dir, 'bayes_opt_state.json')
+                    self.bayesian_optimizer.save_state(bayes_opt_path)
                 
         logger.info(f"Best test accuracy: {self.best_acc:.2f}%")
         return self.best_acc
