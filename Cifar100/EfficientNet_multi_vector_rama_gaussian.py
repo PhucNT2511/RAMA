@@ -486,7 +486,8 @@ class Trainer:
                 correct += predicted.eq(targets).sum().item()
 
                 # Define a model wrapper for attack functions that handles lambda_value
-                attack_model_wrapper = lambda imgs_for_attack: self.model.forward(imgs_for_attack, lambda_value=current_lambda_for_eval)
+                attack_model_wrapper = AttackModelWrapper(self.model, current_lambda_for_eval).to(self.device)
+                
 
                 if test_acc > self.best_acc and (epoch % 15 == 0 or epoch == total_epochs - 1):
                     # FGSM Attack Evaluation
