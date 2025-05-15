@@ -20,7 +20,7 @@ def fgsm_attack(model, images, labels, epsilon, device):
     labels = labels.clone().detach().to(device)
     images.requires_grad = True
 
-    model.eval() # Ensure model is in evaluation mode
+    
     outputs = model(images)
     loss = nn.CrossEntropyLoss()(outputs, labels)
     model.zero_grad()
