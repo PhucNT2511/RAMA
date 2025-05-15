@@ -13,12 +13,9 @@ import torch.optim as optim
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
-from torchvision.models import efficientnet_b2
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
-from torch.utils.data import Dataset, DataLoader
-from datasets import load_dataset
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,6 +72,8 @@ class GaussianRAMALayer(nn.Module):
             lambda_value: lambda
         """
         
+        if lambda_value is not None:
+            self.lambda_value = lambda_value
         
         out = x @ self.projection
 
@@ -95,22 +94,134 @@ class GaussianRAMALayer(nn.Module):
             out = torch.sigmoid(out)
         elif self.activation == "silu":
             out = torch.nn.functional.silu(out)
+        elif self.activation == "gelu":
+            out = torch.nn.functional.gelu(out)
+        return out
+    
+def swish(x):
+    return x * x.sigmoid()
+
+
+def drop_connect(x, drop_ratio):
+    keep_ratio = 1.0 - drop_ratio
+    mask = torch.empty([x.shape[0], 1, 1, 1], dtype=x.dtype, device=x.device)
+    mask.bernoulli_(keep_ratio)
+    x.div_(keep_ratio)
+    x.mul_(mask)
+    return x
+
+
+class SE(nn.Module):
+    '''Squeeze-and-Excitation block with Swish.'''
+
+    def __init__(self, in_channels, se_channels):
+        super(SE, self).__init__()
+        self.se1 = nn.Conv2d(in_channels, se_channels,
+                             kernel_size=1, bias=True)
+        self.se2 = nn.Conv2d(se_channels, in_channels,
+                             kernel_size=1, bias=True)
+
+    def forward(self, x):
+        out = F.adaptive_avg_pool2d(x, (1, 1))
+        out = swish(self.se1(out))
+        out = self.se2(out).sigmoid()
+        out = x * out
         return out
 
+
+class Block(nn.Module):
+    '''expansion + depthwise + pointwise + squeeze-excitation'''
+
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride,
+                 expand_ratio=1,
+                 se_ratio=0.,
+                 drop_rate=0.):
+        super(Block, self).__init__()
+        self.stride = stride
+        self.drop_rate = drop_rate
+        self.expand_ratio = expand_ratio
+
+        # Expansion
+        channels = expand_ratio * in_channels
+        self.conv1 = nn.Conv2d(in_channels,
+                               channels,
+                               kernel_size=1,
+                               stride=1,
+                               padding=0,
+                               bias=False)
+        self.bn1 = nn.BatchNorm2d(channels)
+
+        # Depthwise conv
+        self.conv2 = nn.Conv2d(channels,
+                               channels,
+                               kernel_size=kernel_size,
+                               stride=stride,
+                               padding=(1 if kernel_size == 3 else 2),
+                               groups=channels,
+                               bias=False)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+        # SE layers
+        se_channels = int(in_channels * se_ratio)
+        self.se = SE(channels, se_channels)
+
+        # Output
+        self.conv3 = nn.Conv2d(channels,
+                               out_channels,
+                               kernel_size=1,
+                               stride=1,
+                               padding=0,
+                               bias=False)
+        self.bn3 = nn.BatchNorm2d(out_channels)
+
+        # Skip connection if in and out shapes are the same (MV-V2 style)
+        self.has_skip = (stride == 1) and (in_channels == out_channels)
+
+    def forward(self, x):
+        out = x if self.expand_ratio == 1 else swish(self.bn1(self.conv1(x)))
+        out = swish(self.bn2(self.conv2(out)))
+        out = self.se(out)
+        out = self.bn3(self.conv3(out))
+        if self.has_skip:
+            if self.training and self.drop_rate > 0:
+                out = drop_connect(out, self.drop_rate)
+            out = out + x
+        return out
+
+
 class EfficientNet(nn.Module):
-    """
-    Modified EfficientNet-B2 architecture with Gaussian RAMA layers at multiple positions.
-    
-    Args:
-        num_classes (int): Number of output classes. Default: 200.
-        use_rama (bool): Whether to use RAMA layers. Default: False.
-        rama_config (dict): Configuration for RAMA layers. Default: None.
-    """
-    def __init__(self, num_classes=200, use_rama=False, rama_config=None):
-        super().__init__()
+    def __init__(self, 
+                cfg = {
+                    'num_blocks':        [2, 3, 3, 4, 4, 5, 2],
+                    'expansion':         [1, 6, 6, 6, 6, 6, 6],
+                    'out_channels':      [16, 24, 48, 88, 120, 208, 352],
+                    'kernel_size':       [3, 3, 5, 3, 5, 5, 3],
+                    'stride':            [1, 2, 2, 2, 1, 2, 1],
+                    'dropout_rate':      0.3,
+                    'drop_connect_rate': 0.2,
+                },
+                num_classes=100,
+                use_rama=False, 
+                rama_config=None):
         
-        self.use_rama = use_rama
-        
+        super(EfficientNet, self).__init__()
+
+        self.cfg = cfg
+        self.conv1 = nn.Conv2d(3,
+                               32,
+                               kernel_size=3,
+                               stride=1,
+                               padding=1,
+                               bias=False)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.layers = self._make_layers(in_channels=32)
+        self.linear = nn.Linear(cfg['out_channels'][-1], num_classes)
+
+        self.use_rama = use_rama     
         if rama_config is None:
             rama_config = {
                     "lambda_value": 1.0,  # This lambda_value for Gaussian
@@ -118,66 +229,59 @@ class EfficientNet(nn.Module):
                     "use_normalization": False,
                     "sqrt_dim": False,
                 }
-            
-        self.backbone = efficientnet_b2(weights=None)
-        '''
-        ### Because original model works well with 260x260 images, so if want to train in 32x32, should change in the 1st conv layer.
-        self.backbone.features[0][0] = nn.Conv2d(
-            in_channels=3,
-            out_channels=32,
-            kernel_size=3,
-            stride=1,     # From 2 -> 1
-            padding=1,    #
-            bias=False
-        )
-        '''
-        self.feature_dim = self.backbone.classifier[1].in_features
-
-        self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
-        
-        # Create Gaussian RAMA layer before the linear layer in the network
         if use_rama:
             self.rama_linearLayer = GaussianRAMALayer(
-                self.feature_dim, 
-                self.feature_dim, 
+                cfg['out_channels'][-1], 
+                cfg['out_channels'][-1], 
                 rama_config['lambda_value'], 
                 rama_config.get('use_normalization', False),
                 rama_config.get('activation', 'relu'),
                 rama_config.get('sqrt_dim', False),
             )
 
-        # Dropout và Linear
-        self.dropout = nn.Dropout(p=0.3, inplace=False)
-        self.fc = nn.Linear(self.feature_dim, num_classes)
-        self.features_2 = nn.Sequential(
-            self.dropout,
-            self.fc
-        )
-        
         # Initialize hooks for feature extraction
         self.hooks = []
         self.before_rama_features = None
         self.after_rama_features = None
 
+    def _make_layers(self, in_channels):
+        layers = []
+        cfg = [self.cfg[k] for k in ['expansion', 'out_channels', 'num_blocks', 'kernel_size',
+                                     'stride']]
+        b = 0
+        blocks = sum(self.cfg['num_blocks'])
+        for expansion, out_channels, num_blocks, kernel_size, stride in zip(*cfg):
+            strides = [stride] + [1] * (num_blocks - 1)
+            for stride in strides:
+                drop_rate = self.cfg['drop_connect_rate'] * b / blocks
+                layers.append(
+                    Block(in_channels,
+                          out_channels,
+                          kernel_size,
+                          stride,
+                          expansion,
+                          se_ratio=0.25,
+                          drop_rate=drop_rate))
+                in_channels = out_channels
+        return nn.Sequential(*layers)
+
     def forward(self, x, lambda_value):
-        """Forward pass through the EfficientNet-B2 model with Gaussian RAMA layers."""
-        out = self.features_1(x)
+        out = swish(self.bn1(self.conv1(x)))
+        out = self.layers(out)
+        out = F.adaptive_avg_pool2d(out, 1)
+        out = out.view(out.size(0), -1)
+        dropout_rate = self.cfg['dropout_rate']
+        if self.training and dropout_rate > 0:
+            out = F.dropout(out, p=dropout_rate)
 
-        out = torch.flatten(out, 1)
-
-        # Store features before RAMA for evaluation
         if self.use_rama:
             self.before_rama_features = out.detach().clone()
-            
-        # Apply RAMA before final classification (original position)
-        if self.use_rama:
             out = self.rama_linearLayer(out, lambda_value)
             self.after_rama_features = out.detach().clone()
 
-        out = self.features_2(out)
-        
+        out = self.linear(out)
         return out
-
+    
     def forward_with_features(self, x, lambda_value):
         """
         Forward pass that returns both output and features before/after RAMA.
@@ -187,8 +291,7 @@ class EfficientNet(nn.Module):
         if self.use_rama:
             return outputs, self.before_rama_features, self.after_rama_features
         else:
-            return outputs, None, None
-
+            return outputs, None, None  
 
 class TinyImageNetDataset(Dataset):
     def __init__(self, split, transform=None):
@@ -219,8 +322,7 @@ class DataManager:
 
         self.transform_train = transforms.Compose([
             transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
-            transforms.Resize(260),
-            transforms.RandomCrop(260, padding=16),
+            transforms.RandomCrop(64, padding=8),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -229,7 +331,6 @@ class DataManager:
 
         self.transform_valid = transforms.Compose([
             transforms.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
-            transforms.Resize(260),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
@@ -690,7 +791,7 @@ class Trainer:
 
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "EfficientNet_B2"
+    exp_name = "EfficientNet_B2_SelfBuiltByFGSW"
     exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:

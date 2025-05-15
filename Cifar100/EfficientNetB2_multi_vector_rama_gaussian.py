@@ -196,14 +196,14 @@ class Block(nn.Module):
 class EfficientNet(nn.Module):
     def __init__(self, 
                 cfg = {
-                    'num_blocks': [1, 2, 2, 3, 3, 4, 1],
-                    'expansion': [1, 6, 6, 6, 6, 6, 6],
-                    'out_channels': [16, 24, 40, 80, 112, 192, 320],
-                    'kernel_size': [3, 3, 5, 3, 5, 5, 3],
-                    'stride': [1, 2, 2, 2, 1, 2, 1],
-                    'dropout_rate': 0.2,
+                    'num_blocks':        [2, 3, 3, 4, 4, 5, 2],
+                    'expansion':         [1, 6, 6, 6, 6, 6, 6],
+                    'out_channels':      [16, 24, 48, 88, 120, 208, 352],
+                    'kernel_size':       [3, 3, 5, 3, 5, 5, 3],
+                    'stride':            [1, 2, 2, 2, 1, 2, 1],
+                    'dropout_rate':      0.3,
                     'drop_connect_rate': 0.2,
-                }, 
+                },
                 num_classes=100,
                 use_rama=False, 
                 rama_config=None):
@@ -308,17 +308,15 @@ class DataManager:
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.transform_train = transforms.Compose([
-            transforms.Resize(256),
-            transforms.RandomCrop(224),
+            transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         ])
         
         self.transform_test = transforms.Compose([
-            transforms.Resize(224),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         ])
         
     def get_loaders(self):
@@ -810,7 +808,7 @@ class Trainer:
 
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "Cifar100_EfficientNet_B0"
+    exp_name = "Cifar100_EfficientNet_B2_SelfBuiltByFGSW"
     exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
