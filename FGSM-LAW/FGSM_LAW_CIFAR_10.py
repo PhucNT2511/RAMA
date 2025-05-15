@@ -15,57 +15,32 @@ from torch.autograd import Variable
 # from preact_resnet import PreActResNet18
 from utils import *
 from Feature_model.feature_resnet import *
-from Feature_model.feature_efficientnet import *
+from Feature_model.feature_efficientnet_b0 import *
 from torchvision import datasets, transforms
 import torch.nn.functional as F
 import torch.utils.data as data
 from tqdm import tqdm
 
-NEPTUNE_PRJ_NAME = os.getenv("NEPTUNE_PROJECT", default=None)
-NEPTUNE_API_TOKEN = os.getenv("NEPTUNE_API_TOKEN", default=None)
+NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
+NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
 
 
 def get_experiment_name(args):
     """Generate a unique experiment name based on configuration."""
     exp_name = args.model
-    exp_name += "_BernoulliRAMA" if args.use_rama else "_NoRAMA"
+    exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
         exp_name += f"_{args.bernoulli_values}"  # Add Bernoulli value type (0/1 or -1/1)
         exp_name += "_norm" if args.use_normalization else "_nonorm"
         exp_name += "_sqrt_d_True" if args.sqrt_dim else "_sqrt_d_False"
         exp_name += f"_{args.activation}"
-        exp_name += f"_positions_{args.rama_positions.replace(',', '-')}"
         
     exp_name += f"_epochs{args.epochs}_bs{args.batch_size}"
     if args.use_rama:
         exp_name += f"_p{args.p_value:.2f}"
         exp_name += f"_lambda{args.lambda_value:.2f}"
     return exp_name
-
-
-def parse_rama_positions(positions_str):
-    """
-    Parse comma-separated positions string into a dictionary for RAMA layer positions.
-    
-    Args:
-        positions_str (str): Comma-separated string of positions (e.g. "layer1,layer2,final")
-        
-    Returns:
-        dict: Dictionary mapping position names to boolean values
-    """
-    valid_positions = ['layer1', 'layer2', 'layer3', 'layer4', 'final']
-    positions_dict = {pos: False for pos in valid_positions}
-    
-    if positions_str:
-        selected_positions = [pos.strip() for pos in positions_str.split(',')]
-        for pos in selected_positions:
-            if pos in valid_positions:
-                positions_dict[pos] = True
-            else:
-                logging.warning(f"Invalid RAMA position: {pos}. Skipping.")
-    
-    return positions_dict
 
 
 def eval_at_metrics(model, test_loader, neptune_run=None):
@@ -136,10 +111,6 @@ def get_args():
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
     parser.add_argument('--activation', default='silu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu'],
                         help='activation function for RAMA layers')
-
-    # RAMA position configuration
-    parser.add_argument('--rama-positions', default='final',
-                        type=str, help='comma-separated list of positions to apply RAMA (options: layer1,layer2,layer3,layer4,final)')
 
     parser.add_argument('--factor', default=0.7, type=float)
     parser.add_argument('--length', type=int, default=4, help='length of the holes')
@@ -276,9 +247,6 @@ def main():
     epsilon = (args.epsilon / 255.) / std
     alpha = (args.alpha / 255.) / std
     
-    # Configure RAMA positions
-    rama_positions = parse_rama_positions(args.rama_positions)
-    
     # Bernoulli RAMA configuration
     rama_config = {
         "p_value": args.p_value,
@@ -299,7 +267,6 @@ def main():
         )
         neptune_run["config"] = vars(args)
         neptune_run["rama_config"] = rama_config
-        neptune_run["rama_positions"] = rama_positions
     else:
         neptune_run = None
 
@@ -307,36 +274,25 @@ def main():
     # model.train()
     print('==> Building model..')
     logger.info('==> Building model..')
-    if args.model == "VGG":
-        model = VGG(
-            'VGG19',
-            use_rama=args.use_rama,
-            rama_config=rama_config,
-            rama_positions=rama_positions,
-            rama_type='bernoulli'
-        )
-    elif args.model == "ResNet18":
+    if args.model == "ResNet18":
         model = Feature_ResNet18(
             use_rama=args.use_rama,
             rama_config=rama_config,
-            rama_positions=rama_positions,
             rama_type='bernoulli'
         )
     elif args.model == "PreActResNest18":
         model = PreActResNet18()
-    elif args.model == "WideResNet":
-        model = WideResNet(
+    elif args.model == "EfficientNetB0":
+        model = Feature_EfficientNetB0(
             use_rama=args.use_rama,
             rama_config=rama_config,
-            rama_positions=rama_positions,
-            rama_type='bernoulli'
-        )
-    elif args.model == "EfficientNet":
-        model = Feature_EfficientNet(
+        ).cuda()
+    elif args.model == "EfficientNetB2":
+        model = Feature_EfficientNetB2(
             use_rama=args.use_rama,
             rama_config=rama_config,
-        )
-
+        ).cuda()
+    
     model = model.cuda()
     model.train()
     teacher_model = EMA(model)
@@ -444,12 +400,19 @@ def main():
             adv_acc = (output.max(1)[1] == y).sum().item()
             clean_acc = (adv_output.max(1)[1] == y).sum().item()
             train_n += y.size(0)
+
+            '''
+             # === DEBUG EMA RATIO ===
+            ratio = adv_acc / (clean_acc + 1e-10)
+            print(f"[Debug EMA] adv/clean = {ratio:.3f}", 
+                "-> update EMA" if ratio < args.EMA_value else "-> skip EMA")
+            '''
             
-            # logger.info("*"*300)
-            # logger.info(f"Epoch {epoch}, Batch {i}, Loss: {loss.item()}, Train Acc: {train_acc / train_n}, Adv Acc: {adv_acc / train_n}, Clean Acc: {clean_acc / train_n}, Ratio: {adv_acc / (clean_acc + 1e-10)}, EMA: {args.EMA_value}")
-            if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
-                teacher_model.update_params(model)
-                teacher_model.apply_shadow()
+            print('adv_acc:', adv_acc)
+            print('clean_acc:', clean_acc)
+            #if adv_acc / (clean_acc + 1e-10) < args.EMA_value:
+            teacher_model.update_params(model)
+            teacher_model.apply_shadow()
 
             scheduler.step()
             batch_end_time = time.time()
@@ -479,13 +442,13 @@ def main():
             model_test = VGG('VGG19', 
                             use_rama=args.use_rama,
                             rama_config=rama_config,
-                            rama_positions=rama_positions,
+                            rama_positions='final',
                             rama_type='bernoulli').cuda()
         elif args.model == "ResNet18":
             model_test = Feature_ResNet18(
                 use_rama=args.use_rama,
                 rama_config=rama_config,
-                rama_positions=rama_positions,
+                rama_positions='final',
                 rama_type='bernoulli'
             ).cuda()
         elif args.model == "PreActResNest18":
@@ -494,13 +457,18 @@ def main():
             model_test = WideResNet(
                 use_rama=args.use_rama,
                 rama_config=rama_config,
-                rama_positions=rama_positions,
+                rama_positions='final',
                 rama_type='bernoulli'
             ).cuda()
-        elif args.model == "EfficientNet":
-            model_test = Feature_EfficientNet(
+        elif args.model == "EfficientNetB0":
+            model_test = Feature_EfficientNetB0(
                 use_rama=args.use_rama,
-                rama_config=rama_config
+                rama_config=rama_config,
+            ).cuda()
+        elif args.model == "EfficientNetB2":
+            model_test = Feature_EfficientNetB2(
+                use_rama=args.use_rama,
+                rama_config=rama_config,
             ).cuda()
 
         model_test.load_state_dict(teacher_model.model.state_dict())
