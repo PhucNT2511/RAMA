@@ -11,6 +11,7 @@ from Cifar100_models import *
 # from preact_resnet import PreActResNet18
 from utils import *
 from Feature_model.feature_resnet_cifar100 import *
+from Feature_model.feature_efficientnet_b0 import *
 from torchvision import datasets, transforms
 import torch.nn.functional as F
 import torch.utils.data as data
@@ -180,6 +181,16 @@ def main():
         model = PreActResNet18()
     elif args.model == "WideResNet":
         model = WideResNet()
+    elif args.model == "EfficientNetB0":
+        model = Feature_EfficientNetB0(
+            use_rama=args.use_rama,
+            rama_config=rama_config,
+        ).cuda()
+    elif args.model == "EfficientNetB2":
+        model = Feature_EfficientNetB2(
+            use_rama=args.use_rama,
+            rama_config=rama_config,
+        ).cuda()
     model = model.cuda()
     model.train()
     teacher_model = EMA(model)
@@ -300,6 +311,16 @@ def main():
             model_test = PreActResNet18().cuda()
         elif args.model == "WideResNet":
             model_test = WideResNet().cuda()
+        elif args.model == "EfficientNetB0":
+            model_test = Feature_EfficientNetB0(
+                use_rama=args.use_rama,
+                rama_config=rama_config,
+            ).cuda()
+        elif args.model == "EfficientNetB2":
+            model_test = Feature_EfficientNetB2(
+                use_rama=args.use_rama,
+                rama_config=rama_config,
+            ).cuda()
 
         model_test.load_state_dict(teacher_model.model.state_dict())
         model_test.float()
