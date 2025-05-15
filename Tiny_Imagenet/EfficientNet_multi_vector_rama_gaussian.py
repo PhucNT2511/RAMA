@@ -14,7 +14,7 @@ import torch.optim as optim
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
-from torchvision.models import efficientnet_b2, EfficientNet_B2_Weights
+from torchvision.models import efficientnet_b2
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
@@ -248,6 +248,16 @@ class DataManager:
         return train_loader, valid_loader
 
 
+class AttackModelWrapper(nn.Module):
+    def __init__(self, base_model, lambda_value):
+        super().__init__()
+        self.base_model = base_model
+        self.lambda_value = lambda_value
+
+    def forward(self, x):
+        return self.base_model(x, lambda_value=self.lambda_value)
+
+
 class Trainer:
     """
     Improved trainer class for model training and evaluation with feature quality metrics.
@@ -258,13 +268,13 @@ class Trainer:
         testloader (DataLoader): Testing data loader.
         criterion (nn.Module): Loss function.
         optimizer (optim.Optimizer): Optimizer.
+        scheduler (optim.lr_scheduler): Learning rate scheduler.
         device (torch.device): Device to use for training.
         checkpoint_dir (str): Directory to save checkpoints.
         bayes_opt_config (dict): Configuration for Bayesian optimization.
         neptune_run: Neptune.ai run instance
-        use_hyperparameter_optimization: bool = False ---> TURN ON when you want optimize sigma_p, else OFF
     """
-    def __init__(self, model, trainloader, testloader, criterion, optimizer, 
+    def __init__(self, model, trainloader, testloader, criterion, optimizer, scheduler,
                  device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None, args: Optional[argparse.Namespace] = None):
@@ -273,6 +283,7 @@ class Trainer:
         self.testloader = testloader
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.best_acc = 0
@@ -281,7 +292,6 @@ class Trainer:
         self.use_rama = use_rama
         self.use_hyperparameter_optimization = use_hyperparameter_optimization
         self.best_lambda = None
-        self.best_sigma_p = None
         self.args = args
         
         if self.use_rama:
@@ -346,7 +356,7 @@ class Trainer:
             self.bayesian_optimizer.load_state(path)
             logger.info(f"Loaded max value: {self.bayesian_optimizer.max}")
 
-    def train_one_epoch(self, lambda_value=None):
+    def train_one_epoch(self, lambda_value=None, epoch=0):
         """
         Train the model for one epoch.
         
@@ -358,32 +368,38 @@ class Trainer:
         correct = 0
         total = 0
         pbar = tqdm(self.trainloader, desc="Training")
-        for batch_idx, (orig_inputs, targets) in enumerate(pbar):
-            orig_inputs, targets = orig_inputs.to(self.device), targets.to(self.device)
-            
-            current_batch_inputs = orig_inputs
+        for batch_idx, (inputs, targets) in enumerate(pbar):
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
 
             if self.args and self.args.adversarial_training:
-                self.model.eval() # Switch to eval mode for attack generation
+                self.model.eval() # Set model to eval mode for attack generation
+                current_lambda_for_at = lambda_value # This is self.best_lambda from the train loop
+                inputs_for_attack = inputs.clone().detach()
                 
-                attack_model_wrapper_at = lambda imgs_for_attack: self.model.forward(imgs_for_attack, lambda_value=lambda_value)
+                attack_model_wrapper_at = AttackModelWrapper(self.model, current_lambda_for_at).to(self.device)
+                #attack_model_wrapper_at = lambda imgs_for_attack: self.model.forward(imgs_for_attack, lambda_value=current_lambda_for_at)
 
                 if self.args.at_attack == 'pgd':
-                    adv_inputs = pgd_attack(attack_model_wrapper_at, orig_inputs.clone().detach(), targets,
+                    adv_inputs = pgd_attack(attack_model_wrapper_at, inputs_for_attack, targets,
                                             self.args.at_epsilon, self.args.at_alpha, self.args.at_iter,
                                             self.device, clamp_min=-10.0, clamp_max=10.0)
                 elif self.args.at_attack == 'fgsm':
-                    adv_inputs = fgsm_attack(attack_model_wrapper_at, orig_inputs.clone().detach(), targets,
+                    adv_inputs = fgsm_attack(attack_model_wrapper_at, inputs_for_attack, targets,
                                              self.args.at_epsilon, self.device)
                 else:
-                    adv_inputs = orig_inputs
-                
-                current_batch_inputs = adv_inputs
-                self.model.train() # Switch back to train mode
-            
-            self.optimizer.zero_grad()
-            outputs = self.model.forward(current_batch_inputs, lambda_value=lambda_value)
-            loss = self.criterion(outputs, targets)
+                    adv_inputs = inputs
+
+                self.model.train() # Set model back to train mode
+                self.optimizer.zero_grad()
+                outputs = self.model.forward(adv_inputs, lambda_value=current_lambda_for_at)
+                loss = self.criterion(outputs, targets)
+            else:
+                # Standard training
+                self.model.train()
+                self.optimizer.zero_grad()
+                outputs = self.model.forward(inputs, lambda_value=lambda_value)
+                loss = self.criterion(outputs, targets)
+
             loss.backward()
             self.optimizer.step()
             train_loss += loss.item()
@@ -433,7 +449,7 @@ class Trainer:
         _, test_acc = self.evaluate(lambda_value)
         return test_acc  # Return only accuracy for optimization
 
-    def evaluate_with_metrics(self, sigma_p_value=None, epoch=None, test_acc=None, total_epochs=None):
+    def evaluate_with_metrics(self, lambda_value=None, epoch=None, test_acc=None, total_epochs=None):
         """
         Evaluate the model with additional metrics to understand RAMA impact.
         
@@ -453,57 +469,56 @@ class Trainer:
         class_labels = []
         
         with torch.no_grad():
-            for batch_idx, (inputs, targets) in enumerate(self.testloader):
+            pbar_eval = tqdm(self.testloader, desc=f"Epoch {epoch} Evaluation" if epoch is not None else "Evaluation")
+            for batch_idx, (inputs, targets) in enumerate(pbar_eval):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 
                 # Use the forward pass that returns features
-                if self.use_rama:
-                    outputs, before_features, after_features = self.model.forward_with_features(inputs, sigma_p_value)
-                    if before_features is not None and after_features is not None:
-                        features_original.append(before_features.cpu())
-                        features_after_rama.append(after_features.cpu())
-                        class_labels.append(targets.cpu())
-                else:
-                    outputs, before_features, after_features = self.model.forward_with_features(inputs, None)
-                    if before_features is not None and after_features is not None:
-                        features_original.append(before_features.cpu())
-                        features_after_rama.append(after_features.cpu())
-                        class_labels.append(targets.cpu())
-                
+                current_lambda_for_eval = lambda_value if self.use_rama else None
+                outputs, before_features, after_features = self.model.forward_with_features(inputs, current_lambda_for_eval)
+
+                if self.use_rama and before_features is not None and after_features is not None: # Only collect if RAMA is used and features are returned
+                    features_original.append(before_features.cpu())
+                    features_after_rama.append(after_features.cpu())
+                    class_labels.append(targets.cpu())
+
                 loss = self.criterion(outputs, targets)
                 test_loss += loss.item()
                 _, predicted = outputs.max(1)
                 total += targets.size(0)
                 correct += predicted.eq(targets).sum().item()
+
+                # Define a model wrapper for attack functions that handles lambda_value
+                attack_model_wrapper = AttackModelWrapper(self.model, current_lambda_for_eval).to(self.device)
                 
-                # Define a model wrapper for attack functions that handles sigma_p_value
-                attack_model_wrapper = lambda imgs_for_attack: self.model.forward(imgs_for_attack, sigma_p_value=sigma_p_value)
 
                 if test_acc > self.best_acc and (epoch % 15 == 0 or epoch == total_epochs - 1):
-                    # FGSM Attack Evaluation
-                    if self.args and self.args.eval_fgsm:
-                        adv_images_fgsm = fgsm_attack(attack_model_wrapper, inputs.clone(), targets, self.args.epsilon, self.device)
-                        outputs_fgsm = self.model.forward(adv_images_fgsm, sigma_p_value=sigma_p_value)
-                        _, predicted_fgsm = outputs_fgsm.max(1)
-                        total_fgsm += targets.size(0)
-                        correct_fgsm += predicted_fgsm.eq(targets).sum().item()
+                    with torch.enable_grad():
+                        # FGSM Attack Evaluation
+                        if self.args and self.args.eval_fgsm:
+                            adv_images_fgsm = fgsm_attack(attack_model_wrapper, inputs.clone(), targets, self.args.epsilon, self.device)
+                            outputs_fgsm = self.model.forward(adv_images_fgsm, lambda_value=current_lambda_for_eval)
+                            _, predicted_fgsm = outputs_fgsm.max(1)
+                            total_fgsm += targets.size(0)
+                            correct_fgsm += predicted_fgsm.eq(targets).sum().item()
 
-                    # PGD Attack Evaluation
-                    if self.args and self.args.eval_pgd:
-                        adv_images_pgd = pgd_attack(attack_model_wrapper, inputs.clone(), targets, 
-                                                    self.args.epsilon, self.args.pgd_alpha, self.args.pgd_iter, 
-                                                    self.device, clamp_min=-10.0, clamp_max=10.0) 
-                        outputs_pgd = self.model.forward(adv_images_pgd, sigma_p_value=sigma_p_value)
-                        _, predicted_pgd = outputs_pgd.max(1)
-                        total_pgd += targets.size(0)
-                        correct_pgd += predicted_pgd.eq(targets).sum().item()
-                
+                        # PGD Attack Evaluation
+                        if self.args and self.args.eval_pgd:
+                            adv_images_pgd = pgd_attack(attack_model_wrapper, inputs.clone(), targets, 
+                                                        self.args.epsilon, self.args.pgd_alpha, self.args.pgd_iter, 
+                                                        self.device, clamp_min=-10.0, clamp_max=10.0) # Wide clamps for normalized data
+                            outputs_pgd = self.model.forward(adv_images_pgd, lambda_value=current_lambda_for_eval)
+                            _, predicted_pgd = outputs_pgd.max(1)
+                            total_pgd += targets.size(0)
+                            correct_pgd += predicted_pgd.eq(targets).sum().item()
+
                 eval_desc = f"Clean Acc: {100.*correct/total:.2f}%"
                 if self.args and self.args.eval_fgsm:
                     eval_desc += f" | FGSM Acc: {100.*correct_fgsm/total_fgsm if total_fgsm > 0 else 0:.2f}%"
                 if self.args and self.args.eval_pgd:
                     eval_desc += f" | PGD Acc: {100.*correct_pgd/total_pgd if total_pgd > 0 else 0:.2f}%"
-        
+                pbar_eval.set_postfix_str(eval_desc)
+
         # Calculate standard metrics
         accuracy = 100. * correct / total
         avg_loss = test_loss / len(self.testloader)
@@ -523,11 +538,11 @@ class Trainer:
             # Log feature metrics
             if self.neptune_run:
                 for key, value in feature_metrics.items():
-                    self.neptune_run[f"Feature/{key}"].append(value)
+                    self.neptune_run[f"Test/Feature/{key}"].append(value)
             
-            if self.writer:
+            if self.writer and epoch is not None:
                 for key, value in feature_metrics.items():
-                    self.writer.add_scalar(f"Feature/{key}", value)
+                    self.writer.add_scalar(f"Test/Feature/{key}", value, epoch)
         
         eval_results = {
             'loss': avg_loss,
@@ -552,7 +567,7 @@ class Trainer:
                 self.neptune_run[f"Test/PGD_Accuracy_eps{self.args.epsilon}_alpha{self.args.pgd_alpha}_iter{self.args.pgd_iter}"].append(pgd_accuracy)
             if self.writer and epoch is not None:
                 self.writer.add_scalar(f"Test/PGD_Accuracy_eps{self.args.epsilon}_alpha{self.args.pgd_alpha}_iter{self.args.pgd_iter}", pgd_accuracy, epoch)
-                
+
         return eval_results
 
     def _calculate_feature_metrics(self, features_before, features_after, labels):
@@ -655,28 +670,40 @@ class Trainer:
         Returns:
             float: Best test accuracy.
         """
+        # First, run initial optimization to find a good p
         if self.use_rama and self.use_hyperparameter_optimization:
             if start_epoch == 0:
-                logger.info("Running initial Bayesian optimization for sigma_p...")
-                self.best_sigma_p, _, _ = self.optimize_sigma_p()
+                logger.info("Running initial Bayesian optimization...")
+                self.best_lambda, _, _ = self.optimize_lambda()
+            else:
+                # Try to load previous optimization state
+                bayes_opt_path = os.path.join(self.checkpoint_dir, 'bayes_opt_state.json')
+                self.load_optimizer_state(bayes_opt_path)
+                if self.bayesian_optimizer.max:
+                    self.best_lambda = self.bayesian_optimizer.max["params"]["lambda_value"]
+                    logger.info(f"Loaded best lambda from previous run: {self.best_lambda:.6f}")
+                else:
+                    logger.info("No previous optimization state found, running initial optimization...")
+                    self.best_lambda, _, _ = self.optimize_lambda()
 
         for epoch in range(start_epoch, epochs):
             logger.info(f"\nEpoch: {epoch+1}/{epochs}")
 
             # Train with best p
-            train_loss, train_acc = self.train_one_epoch(lambda_value=self.best_lambda)
+            train_loss, train_acc = self.train_one_epoch(lambda_value=self.best_lambda, epoch=epoch)
             
             # Basic evaluation
             test_loss, test_acc = self.evaluate(lambda_value=self.best_lambda)
             
-            # Detailed evaluation with feature metrics
-            metrics = self.evaluate_with_metrics(sigma_p_value=self.best_sigma_p, epoch=epoch, test_acc=test_acc, total_epochs=epochs)
-            if 'feature_metrics' in metrics and metrics['feature_metrics']:
-                feature_metrics = metrics['feature_metrics']
-                logger.info(f"Feature metrics at epoch {epoch+1}:")
-                logger.info(f"  Fisher ratio before RAMA: {feature_metrics['fisher_ratio_before']:.4f}")
-                logger.info(f"  Fisher ratio after RAMA: {feature_metrics['fisher_ratio_after']:.4f}")
-                logger.info(f"  Fisher improvement: {feature_metrics['fisher_improvement']:.4f}x")
+            # Detailed evaluation with feature metrics (once every 5 epochs to save time)
+            if epoch % 5 == 0 or epoch == epochs - 1:
+                metrics = self.evaluate_with_metrics(lambda_value=self.best_lambda, epoch=epoch, test_acc=test_acc, total_epochs=epochs)
+                if 'feature_metrics' in metrics and metrics['feature_metrics']:
+                    feature_metrics = metrics['feature_metrics']
+                    logger.info(f"Feature metrics at epoch {epoch+1}:")
+                    logger.info(f"  Fisher ratio before RAMA: {feature_metrics['fisher_ratio_before']:.4f}")
+                    logger.info(f"  Fisher ratio after RAMA: {feature_metrics['fisher_ratio_after']:.4f}")
+                    logger.info(f"  Fisher improvement: {feature_metrics['fisher_improvement']:.4f}x")
 
             # Perform Bayesian optimization periodically.
             if (self.use_rama and self.use_hyperparameter_optimization and
@@ -707,7 +734,8 @@ class Trainer:
                         self.bayesian_optimizer.set_bounds(
                             new_bounds={"lambda_value": (new_min, self.bayes_opt_config["lambda_max"])}
                         )
-
+            self.scheduler.step()
+            
             # Log metrics.
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
             logger.info(f"Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%")
@@ -748,7 +776,7 @@ class Trainer:
 
 def get_experiment_name(args: argparse.Namespace) -> str:
     """Generate a unique experiment name based on configuration."""
-    exp_name = "EfficientNetB2_TinyImageNet"
+    exp_name = "EfficientNet_B2"
     exp_name += "_GaussianRAMA" if args.use_rama else "_NoRAMA"
     
     if args.use_rama:
@@ -760,13 +788,10 @@ def get_experiment_name(args: argparse.Namespace) -> str:
     exp_name += f"_lr{args.lr}_epochs{args.epochs}_bs{args.batch_size}"
     
     if args.use_rama:
-        exp_name += f"_sigma_p{args.sigma_p_value:.4f}"
-        exp_name += f"_lambda{args.lambda_value:.4f}"
+        exp_name += f"_lambda_{args.lambda_value}" 
 
-    # Add AT status to experiment name
     if args.adversarial_training:
         exp_name += f"_AT-{args.at_attack}"
-
     return exp_name
 
 
@@ -800,7 +825,7 @@ def set_seed(seed):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch Tiny ImageNet Training with EfficientNet and Gaussian RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch Tiny_Imagenet Training with EfficientNet and Gaussian RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
@@ -821,7 +846,7 @@ def parse_args():
 
     # Gaussian RAMA configuration
     parser.add_argument('--use-rama', action='store_true', help='whether to use RAMA layers')
-    parser.add_argument('--use-hyperparameter-optimization', action='store_true', help='whether to use Bayesian optimization for p-value')
+    parser.add_argument('--use-hyperparameter-optimization', action='store_true', help='whether to use Bayesian optimization for lambda-value')
     parser.add_argument('--lambda-value', default=0.05, type=float, help='Lambda_value for RAMA')
     parser.add_argument('--sqrt-dim', default= False, help='Whether multiply with sqrt(d) or not')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
@@ -837,11 +862,14 @@ def parse_args():
     parser.add_argument('--bayes-xi', default=0.01, type=float, help='exploration-exploitation parameter for ei/poi')
     parser.add_argument('--bayes-kappa', default=2.5, type=float, help='exploration-exploitation parameter for ucb')
     parser.add_argument('--optimize-every', default=5, type=int, help='optimize Lambda every N epochs')
-    parser.add_argument('--sigma-p-value', default=0.05, type=float, help='Sigma_p value for Gaussian RAMA')
-    parser.add_argument('--at-attack', default='pgd', choices=['pgd', 'fgsm'], help='Attack type for adversarial training')
+
+    # Adversarial Training (AT) parameters
+    parser.add_argument('--adversarial-training', '--at', action='store_true', help='Enable adversarial training')
+    parser.add_argument('--at-attack', default='pgd', choices=['fgsm', 'pgd'], help='Attack type for adversarial training')
+    parser.add_argument('--at-epsilon', default=0.03, type=float, help='Epsilon for adversarial training attack')
     parser.add_argument('--at-alpha', default=0.01, type=float, help='Alpha for PGD adversarial training attack')
     parser.add_argument('--at-iter', default=7, type=int, help='Iterations for PGD adversarial training attack')
-    parser.add_argument('--adversarial-training', '--at', action='store_true', help='Enable adversarial training')
+        
     return parser.parse_args()
 
 
@@ -864,7 +892,7 @@ def main():
     logger.info(f"Using device: {device}")
     
     # Prepare data
-    data_manager = DataManager(args.batch_size, args.num_workers)
+    data_manager = DataManager(args.data_dir, args.batch_size, args.num_workers)
     trainloader, testloader = data_manager.get_loaders()
     
     # Gaussian RAMA configuration
@@ -873,7 +901,6 @@ def main():
         "activation": args.activation,
         "use_normalization": args.use_normalization,
         "sqrt_dim": args.sqrt_dim,
-        "sigma_p_value": args.sigma_p_value,
     }
     
     # Create model
@@ -891,7 +918,8 @@ def main():
         momentum=0.9, 
         weight_decay=5e-4
     )
-    
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+
     # Resume from checkpoint if specified
     start_epoch = 0
     best_acc = 0
@@ -941,10 +969,12 @@ def main():
         testloader=testloader,
         criterion=criterion,
         optimizer=optimizer,
+        scheduler=scheduler,
         device=device,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
         use_rama=args.use_rama,
+        use_hyperparameter_optimization=args.use_hyperparameter_optimization,
         neptune_run=neptune_run,
         writer=writer,
         args=args

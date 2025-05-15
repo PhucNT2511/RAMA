@@ -255,6 +255,7 @@ class DataManager:
         )
         return trainloader, testloader
 
+
 class AttackModelWrapper(nn.Module):
     def __init__(self, base_model, lambda_value):
         super().__init__()
