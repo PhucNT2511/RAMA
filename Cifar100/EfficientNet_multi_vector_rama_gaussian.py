@@ -24,6 +24,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(script_dir)
 sys.path.append(parent_dir)
 
+print("Parent directory added to sys.path:", parent_dir)
+print("Current script directory:", script_dir)
+
 from Cifar10.common.attacks import fgsm_attack, pgd_attack
 
 logging.basicConfig(
