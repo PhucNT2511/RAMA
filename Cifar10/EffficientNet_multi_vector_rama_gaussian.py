@@ -40,8 +40,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 #MAX_lambda_value = 10
 #MIN_lambda_value = 1e-3
-NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
-NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
+NEPTUNE_PRJ_NAME = "phuc2k3bn/RAMA"
+NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5YzRiMDQ2MS0zYjdhLTRiYjctYjVkZC1lNWExMzAwOWJjNjMifQ=="
 
 ##### RAMA with Gaussian for U matrix instead of norm distribution
 class GaussianRAMALayer(nn.Module):
@@ -188,7 +188,7 @@ class EfficientNet(nn.Module):
 
 class DataManager:
     """
-    Manager for CIFAR-100 dataset preparation and loading.
+    Manager for CIFAR-10 dataset preparation and loading.
     
     Args:
         data_dir (str): Directory to store/load dataset.
@@ -821,7 +821,7 @@ def set_seed(seed):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='PyTorch CIFAR-100 Training with EfficientNet and Gaussian RAMA Layers')
+    parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training with EfficientNet and Gaussian RAMA Layers')
     
     # Training parameters
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')

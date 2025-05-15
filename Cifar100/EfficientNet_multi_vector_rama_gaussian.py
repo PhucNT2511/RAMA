@@ -127,6 +127,14 @@ class EfficientNet(nn.Module):
                 }
             
         self.backbone = efficientnet_b2(weights=None)
+        self.backbone.features[0][0] = nn.Conv2d(
+            in_channels=3,
+            out_channels=32,
+            kernel_size=3,
+            stride=1,     
+            padding=1,    
+            bias=False
+        )
         self.feature_dim = self.backbone.classifier[1].in_features
 
         self.features_1 = nn.Sequential(*list(self.backbone.children())[:-1]) 
