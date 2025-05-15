@@ -15,6 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
+from torch.utils.data import DataLoader, Dataset
 import math
 
 logging.basicConfig(
