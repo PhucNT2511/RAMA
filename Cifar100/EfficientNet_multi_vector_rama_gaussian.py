@@ -246,15 +246,14 @@ class DataManager:
             num_workers=self.num_workers
         )
         return trainloader, testloader
-    
+
 class AttackModelWrapper(nn.Module):
-    def __init__(self, base_model: nn.Module, lambda_value: float):
+    def __init__(self, base_model, lambda_value):
         super().__init__()
         self.base_model = base_model
         self.lambda_value = lambda_value
 
     def forward(self, x):
-        # Gọi forward của model gốc với tham số lambda_value
         return self.base_model(x, lambda_value=self.lambda_value)
 
 
@@ -374,8 +373,8 @@ class Trainer:
                 current_lambda_for_at = lambda_value # This is self.best_lambda from the train loop
                 inputs_for_attack = inputs.clone().detach()
                 
-                #attack_model_wrapper_at = AttackModelWrapper(self.model, current_lambda_for_at).to(self.device)
-                attack_model_wrapper_at = lambda imgs_for_attack: self.model.forward(imgs_for_attack, lambda_value=current_lambda_for_at)
+                attack_model_wrapper_at = AttackModelWrapper(self.model, current_lambda_for_at).to(self.device)
+                #attack_model_wrapper_at = lambda imgs_for_attack: self.model.forward(imgs_for_attack, lambda_value=current_lambda_for_at)
 
                 if self.args.at_attack == 'pgd':
                     adv_inputs = pgd_attack(attack_model_wrapper_at, inputs_for_attack, targets,

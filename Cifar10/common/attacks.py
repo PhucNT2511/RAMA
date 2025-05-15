@@ -20,7 +20,7 @@ def fgsm_attack(model, images, labels, epsilon, device):
     labels = labels.clone().detach().to(device)
     images.requires_grad = True
 
-    #model.eval() # Ensure model is in evaluation mode
+    model.eval() # Ensure model is in evaluation mode
     
     outputs = model(images)
     loss = nn.CrossEntropyLoss()(outputs, labels)
@@ -65,7 +65,7 @@ def pgd_attack(model, images, labels, epsilon, alpha, num_iter, device, clamp_mi
     adv_images = adv_images + torch.empty_like(adv_images).uniform_(-epsilon, epsilon)
     adv_images = torch.clamp(adv_images, min=clamp_min, max=clamp_max).detach()
 
-    #model.eval() # Ensure model is in evaluation mode
+    model.eval() # Ensure model is in evaluation mode
 
     for _ in range(num_iter):
         adv_images.requires_grad = True
