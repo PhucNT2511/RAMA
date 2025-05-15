@@ -39,8 +39,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 #MAX_lambda_value = 10
 #MIN_lambda_value = 1e-3
-NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
-NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
+NEPTUNE_PRJ_NAME = "phuc2k3bn/RAMA"
+NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5YzRiMDQ2MS0zYjdhLTRiYjctYjVkZC1lNWExMzAwOWJjNjMifQ=="
 
 ##### RAMA with Gaussian for U matrix instead of norm distribution
 class GaussianRAMALayer(nn.Module):
@@ -735,7 +735,7 @@ class Trainer:
                             new_bounds={"lambda_value": (new_min, self.bayes_opt_config["lambda_max"])}
                         )
             self.scheduler.step()
-            
+
             # Log metrics.
             logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
             logger.info(f"Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%")
