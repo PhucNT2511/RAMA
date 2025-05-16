@@ -492,7 +492,7 @@ class Trainer:
                 attack_model_wrapper = AttackModelWrapper(self.model, current_lambda_for_eval).to(self.device)
                 
 
-                if test_acc > self.best_acc and (epoch % 15 == 0 or epoch == total_epochs - 1):
+                if test_acc > self.best_acc or (epoch % 10 == 0 or epoch == total_epochs - 1):
                     with torch.enable_grad():
                         # FGSM Attack Evaluation
                         if self.args and self.args.eval_fgsm:
