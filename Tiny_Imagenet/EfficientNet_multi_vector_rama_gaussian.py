@@ -696,14 +696,14 @@ class Trainer:
             test_loss, test_acc = self.evaluate(lambda_value=self.best_lambda)
             
             # Detailed evaluation with feature metrics (once every 5 epochs to save time)
-            if epoch % 5 == 0 or epoch == epochs - 1:
-                metrics = self.evaluate_with_metrics(lambda_value=self.best_lambda, epoch=epoch, test_acc=test_acc, total_epochs=epochs)
-                if 'feature_metrics' in metrics and metrics['feature_metrics']:
-                    feature_metrics = metrics['feature_metrics']
-                    logger.info(f"Feature metrics at epoch {epoch+1}:")
-                    logger.info(f"  Fisher ratio before RAMA: {feature_metrics['fisher_ratio_before']:.4f}")
-                    logger.info(f"  Fisher ratio after RAMA: {feature_metrics['fisher_ratio_after']:.4f}")
-                    logger.info(f"  Fisher improvement: {feature_metrics['fisher_improvement']:.4f}x")
+            #if epoch % 5 == 0 or epoch == epochs - 1:
+            metrics = self.evaluate_with_metrics(lambda_value=self.best_lambda, epoch=epoch, test_acc=test_acc, total_epochs=epochs)
+            if 'feature_metrics' in metrics and metrics['feature_metrics']:
+                feature_metrics = metrics['feature_metrics']
+                logger.info(f"Feature metrics at epoch {epoch+1}:")
+                logger.info(f"  Fisher ratio before RAMA: {feature_metrics['fisher_ratio_before']:.4f}")
+                logger.info(f"  Fisher ratio after RAMA: {feature_metrics['fisher_ratio_after']:.4f}")
+                logger.info(f"  Fisher improvement: {feature_metrics['fisher_improvement']:.4f}x")
 
             # Perform Bayesian optimization periodically.
             if (self.use_rama and self.use_hyperparameter_optimization and
