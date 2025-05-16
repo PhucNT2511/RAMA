@@ -29,25 +29,19 @@ print("Current script directory:", script_dir)
 
 from Cifar10.common.attacks import fgsm_attack, pgd_attack
 
-# Xóa tất cả các handler hiện tại nếu có
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
-
-# Tạo thư mục logs nếu chưa có
 os.makedirs("logs", exist_ok=True)
-
-# Cấu hình logger với level cao nhất (DEBUG)
 logging.basicConfig(
-    level=logging.DEBUG,  # ✅ Level cao nhất
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler("logs/training.log"),
         logging.StreamHandler()
     ]
 )
-
 logger = logging.getLogger(__name__)
-logger.debug("🚀 Logger đã được cấu hình ở mức DEBUG")
+
 
 #MAX_lambda_value = 10
 #MIN_lambda_value = 1e-3
