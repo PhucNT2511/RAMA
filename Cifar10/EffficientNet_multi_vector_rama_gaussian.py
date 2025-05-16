@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 
 #MAX_lambda_value = 10
 #MIN_lambda_value = 1e-3
-NEPTUNE_PRJ_NAME = "phuc2k3bn/RAMA"
-NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5YzRiMDQ2MS0zYjdhLTRiYjctYjVkZC1lNWExMzAwOWJjNjMifQ=="
+NEPTUNE_PRJ_NAME = "phuca1tt1bn/RAMA"
+NEPTUNE_API_TOKEN = "eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5ODZlNDU0Yy1iMDk0LTQ5MDEtOGNiYi00OTZlYTY4ODI0MzgifQ=="
 
 ##### RAMA with Gaussian for U matrix instead of norm distribution
 class GaussianRAMALayer(nn.Module):
