@@ -28,15 +28,26 @@ sys.path.append(parent_dir)
 
 from Cifar10.common.attacks import fgsm_attack, pgd_attack
 
+# Xóa tất cả các handler hiện tại nếu có
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+# Tạo thư mục logs nếu chưa có
+os.makedirs("logs", exist_ok=True)
+
+# Cấu hình logger với level cao nhất (DEBUG)
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.DEBUG,  # ✅ Level cao nhất
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("training.log"),
+        logging.FileHandler("logs/training.log"),
         logging.StreamHandler()
     ]
 )
+
 logger = logging.getLogger(__name__)
+logger.debug("🚀 Logger đã được cấu hình ở mức DEBUG")
+
 #MAX_lambda_value = 10
 #MIN_lambda_value = 1e-3
 NEPTUNE_PRJ_NAME = "phuc2k3bn/RAMA"
