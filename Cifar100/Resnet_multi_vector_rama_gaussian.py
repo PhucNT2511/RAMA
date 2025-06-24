@@ -968,6 +968,7 @@ def main():
         criterion=criterion,
         optimizer=optimizer,
         device=device,
+        use_hyperparameter_optimization =args.use_hyperparameter_optimization,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
         use_rama=args.use_rama,

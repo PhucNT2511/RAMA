@@ -17,6 +17,10 @@ from bayes_opt import BayesianOptimization, acquisition
 from tqdm import tqdm
 import math
 
+# Xoá tất cả handler cũ (rất quan trọng trong notebook/Kaggle)
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -980,6 +984,7 @@ def main():
         criterion=criterion,
         optimizer=optimizer,
         device=device,
+        use_hyperparameter_optimization=args.use_hyperparameter_optimization,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
         use_rama=args.use_rama,
