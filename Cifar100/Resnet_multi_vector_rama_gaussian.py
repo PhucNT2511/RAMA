@@ -85,7 +85,7 @@ class GaussianRAMALayer(nn.Module):
         if self.activation == "relu":
             out = F.relu(out)
         elif self.activation == "leaky_relu":
-            out = F.leaky_relu(out, negative_slope=0.0001)
+            out = F.leaky_relu(out, negative_slope=0.01)
         elif self.activation == "tanh":
             out = torch.tanh(out)
         elif self.activation == "sigmoid":
