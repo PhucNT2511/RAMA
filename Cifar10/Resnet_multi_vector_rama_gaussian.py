@@ -83,11 +83,7 @@ class GaussianRAMALayer(nn.Module):
         
         out = x @ self.projection1
 
-        out *= self.sqrt_d * self.lambda_value
-
-        # Apply normalization if specified
-        if self.use_normalization:
-            out = self.norm1(out)
+        #out *= self.sqrt_d * self.lambda_value
 
         # Apply activation function
         if self.activation == "relu":
@@ -102,11 +98,11 @@ class GaussianRAMALayer(nn.Module):
             out = torch.nn.functional.silu(out)
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
+        
+        if self.use_normalization:
+            out = self.norm1(out)
 
         out = out @ self.projection2
-
-        if self.use_normalization:
-            out = self.norm2(out)
 
         if self.activation == "relu":
             out = F.relu(out)
@@ -120,6 +116,9 @@ class GaussianRAMALayer(nn.Module):
             out = torch.nn.functional.silu(out)
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
+
+        if self.use_normalization:
+            out = self.norm2(out)
             
         return out
 
