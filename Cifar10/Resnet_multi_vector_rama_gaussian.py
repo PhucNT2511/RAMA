@@ -47,7 +47,7 @@ class GaussianRAMALayer(nn.Module):
         activation (str): Activation function to use. Options: relu, leaky_relu, tanh, sigmoid.
     """
     def __init__(self, input_dim, output_dim, lambda_value=1.0, 
-                 use_normalization=True, activation="relu", sqrt_dim=False):
+                 use_normalization=True, activation="relu", sqrt_dim=False, dropout=False):
         super(GaussianRAMALayer, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
