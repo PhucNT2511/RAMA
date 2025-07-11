@@ -115,6 +115,8 @@ class GaussianRAMALayer(nn.Module):
             out = torch.nn.functional.silu(out)
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
+        if self.use_normalization:
+            out = self.norm(out)
             
         return out
 
