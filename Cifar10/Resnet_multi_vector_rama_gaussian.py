@@ -47,7 +47,7 @@ class GaussianRAMALayer(nn.Module):
         activation (str): Activation function to use. Options: relu, leaky_relu, tanh, sigmoid.
     """
     def __init__(self, input_dim, output_dim, lambda_value=1.0, 
-                 use_normalization=True, activation="relu", sqrt_dim=False, dropout=False):
+                 use_normalization=True, activation="relu", sqrt_dim=False):
         super(GaussianRAMALayer, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -60,17 +60,15 @@ class GaussianRAMALayer(nn.Module):
             self.sqrt_d = math.sqrt(input_dim)
         
 
-        projection = torch.randn(input_dim, output_dim)
-        self.projection = nn.Parameter(projection, requires_grad=False)
+        projection1 = torch.randn(input_dim, input_dim//2)
+        self.projection1 = nn.Parameter(projection1, requires_grad=False)
+
+        projection2 = torch.randn(input_dim//2, output_dim)
+        self.projection2 = nn.Parameter(projection2, requires_grad=False)
 
         # Add layer normalization for stabilizing the output distribution.
         if use_normalization:
             self.norm = nn.LayerNorm(output_dim)
-        
-        if dropout == True:
-            self.dropout = nn.Dropout()
-        else:
-            self.dropout = nn.Identity()
 
     def forward(self, x, lambda_value):
         """
@@ -82,9 +80,9 @@ class GaussianRAMALayer(nn.Module):
         """
         
         
-        out = x @ self.projection
+        out = x @ self.projection1
 
-        out *= self.sqrt_d * self.lambda_value
+        #out *= self.sqrt_d * self.lambda_value
 
         # Apply normalization if specified
         if self.use_normalization:
@@ -94,7 +92,7 @@ class GaussianRAMALayer(nn.Module):
         if self.activation == "relu":
             out = F.relu(out)
         elif self.activation == "leaky_relu":
-            out = F.leaky_relu(out, negative_slope=0.0001)
+            out = F.leaky_relu(out, negative_slope=0.01)
         elif self.activation == "tanh":
             out = torch.tanh(out)
         elif self.activation == "sigmoid":
@@ -103,7 +101,22 @@ class GaussianRAMALayer(nn.Module):
             out = torch.nn.functional.silu(out)
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
-        return self.dropout(out)
+
+        out = out @ self.projection2
+        if self.activation == "relu":
+            out = F.relu(out)
+        elif self.activation == "leaky_relu":
+            out = F.leaky_relu(out, negative_slope=0.01)
+        elif self.activation == "tanh":
+            out = torch.tanh(out)
+        elif self.activation == "sigmoid":
+            out = torch.sigmoid(out)
+        elif self.activation == "silu":
+            out = torch.nn.functional.silu(out)
+        elif self.activation == "gelu":
+            out = torch.nn.functional.gelu(out)
+            
+        return out
 
 class ResidualBlock(nn.Module):
     """
