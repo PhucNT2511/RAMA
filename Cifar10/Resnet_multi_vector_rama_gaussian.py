@@ -83,7 +83,7 @@ class GaussianRAMALayer(nn.Module):
         
         out = x @ self.projection1
 
-        #out *= self.sqrt_d * self.lambda_value
+        out *= self.sqrt_d * self.lambda_value
 
         # Apply normalization if specified
         if self.use_normalization:
@@ -107,7 +107,7 @@ class GaussianRAMALayer(nn.Module):
 
         if self.use_normalization:
             out = self.norm2(out)
-            
+
         if self.activation == "relu":
             out = F.relu(out)
         elif self.activation == "leaky_relu":
