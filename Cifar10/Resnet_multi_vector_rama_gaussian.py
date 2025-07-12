@@ -110,7 +110,7 @@ class GaussianRAMALayer(nn.Module):
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
             
-        return out
+        return out + x
 
 class ResidualBlock(nn.Module):
     """
