@@ -88,7 +88,9 @@ class GaussianRAMALayer(nn.Module):
             lambda_value: lambda
         """
         
-        
+        if lambda_value is not None:
+            self.lambda_value = lambda_value
+
         out = x @ self.projection
 
         out *= self.sqrt_d * self.lambda_value
@@ -110,7 +112,7 @@ class GaussianRAMALayer(nn.Module):
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
             
-        return out + x
+        return out
 
 class ResidualBlock(nn.Module):
     """
@@ -367,7 +369,7 @@ class Trainer:
         neptune_run: Neptune.ai run instance
     """
     def __init__(self, model, trainloader, testloader, criterion, optimizer, 
-                 device, checkpoint_dir, bayes_opt_config=None, use_rama: bool = False,
+                 device, checkpoint_dir, lambda_value=0.01, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None):
         self.model = model
@@ -383,6 +385,7 @@ class Trainer:
         self.use_rama = use_rama
         self.use_hyperparameter_optimization = use_hyperparameter_optimization
         self.best_lambda = None
+        self.lambda_ = lambda_value
         
         if self.use_rama:
             # Default Bayesian optimization configuration
@@ -704,15 +707,21 @@ class Trainer:
         for epoch in range(start_epoch, epochs):
             logger.info(f"\nEpoch: {epoch+1}/{epochs}")
 
+            if (epoch + 1) % 30 == 0:
+                self.lambda_ *= 3
+
             # Train with best p
-            train_loss, train_acc = self.train_one_epoch(lambda_value=self.best_lambda)
+            #train_loss, train_acc = self.train_one_epoch(lambda_value=self.best_lambda)
+            train_loss, train_acc = self.train_one_epoch(lambda_value=self.lambda_)
             
             # Basic evaluation
-            test_loss, test_acc = self.evaluate(lambda_value=self.best_lambda)
+            #test_loss, test_acc = self.evaluate(lambda_value=self.best_lambda)
+            test_loss, test_acc = self.evaluate(lambda_value=self.lambda_)
             
             # Detailed evaluation with feature metrics (once every 5 epochs to save time)
             # if epoch % 5 == 0 or epoch == epochs - 1:
-            metrics = self.evaluate_with_metrics(lambda_value=self.best_lambda)
+            #metrics = self.evaluate_with_metrics(lambda_value=self.best_lambda)
+            metrics = self.evaluate_with_metrics(lambda_value=self.lambda_)
             if 'feature_metrics' in metrics and metrics['feature_metrics']:
                 feature_metrics = metrics['feature_metrics']
                 logger.info(f"Feature metrics at epoch {epoch+1}:")
@@ -875,7 +884,7 @@ def parse_args():
     # Gaussian RAMA configuration
     parser.add_argument('--use-rama', action='store_true', help='whether to use RAMA layers')
     parser.add_argument('--use-hyperparameter-optimization', action='store_true', help='whether to use Bayesian optimization for p-value')
-    parser.add_argument('--lambda-value', default=1.0, type=float, help='Lambda_value for RAMA')
+    parser.add_argument('--lambda-value', default=0.01, type=float, help='Lambda_value for RAMA')
     parser.add_argument('--sqrt-dim', default= False, help='Whether multiply with sqrt(d) or not')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
     parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu', 'gelu'],
@@ -991,6 +1000,7 @@ def main():
         criterion=criterion,
         optimizer=optimizer,
         device=device,
+        lambda_value=args.lambda_value,
         use_hyperparameter_optimization=args.use_hyperparameter_optimization,
         checkpoint_dir=args.checkpoint_dir,
         bayes_opt_config=bayes_opt_config,
