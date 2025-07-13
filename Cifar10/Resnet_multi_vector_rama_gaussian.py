@@ -707,8 +707,7 @@ class Trainer:
         for epoch in range(start_epoch, epochs):
             logger.info(f"\nEpoch: {epoch+1}/{epochs}")
 
-            if (epoch + 1) % 30 == 0:
-                self.lambda_ *= 3
+            self.lambda_ = (3.0 - 0.01) / epochs * (epochs - 1 - epoch) / (epochs - 1) + 0.01
 
             # Train with best p
             #train_loss, train_acc = self.train_one_epoch(lambda_value=self.best_lambda)
