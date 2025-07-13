@@ -366,7 +366,7 @@ class Trainer:
         neptune_run: Neptune.ai run instance
     """
     def __init__(self, model, trainloader, testloader, criterion, optimizer, 
-                 device, checkpoint_dir, lambda_value=0.005, bayes_opt_config=None, use_rama: bool = False,
+                 device, checkpoint_dir, lambda_value=0.01, bayes_opt_config=None, use_rama: bool = False,
                  use_hyperparameter_optimization: bool = False,
                  neptune_run: Optional[neptune.Run] = None, writer: Optional[SummaryWriter] = None):
         self.model = model
@@ -704,7 +704,7 @@ class Trainer:
         for epoch in range(start_epoch, epochs):
             logger.info(f"\nEpoch: {epoch+1}/{epochs}")
 
-            self.lambda_ = (3.0 - 0.005) / epochs * (epochs - 1 - epoch) / (epochs - 1) + 0.005
+            self.lambda_ = (3.0 - 0.01) / epochs * (epochs - 1 - epoch) / (epochs - 1) + 0.01
 
             # Train with best p
             #train_loss, train_acc = self.train_one_epoch(lambda_value=self.best_lambda)
@@ -879,7 +879,7 @@ def parse_args():
     # Gaussian RAMA configuration
     parser.add_argument('--use-rama', action='store_true', help='whether to use RAMA layers')
     parser.add_argument('--use-hyperparameter-optimization', action='store_true', help='whether to use Bayesian optimization for p-value')
-    parser.add_argument('--lambda-value', default=0.005, type=float, help='Lambda_value for RAMA')
+    parser.add_argument('--lambda-value', default=0.01, type=float, help='Lambda_value for RAMA')
     parser.add_argument('--sqrt-dim', default= False, help='Whether multiply with sqrt(d) or not')
     parser.add_argument('--use-normalization', action='store_true', help='use layer normalization in RAMA layers')
     parser.add_argument('--activation', default='relu', choices=['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu', 'gelu'],
