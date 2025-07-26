@@ -936,12 +936,20 @@ def main():
 
     # Loss function and optimizer
     criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(
+        model.parameters(), 
+        lr=args.lr, 
+        weight_decay=5e-4
+    ) 
+
+    '''
     optimizer = optim.SGD(
         model.parameters(), 
         lr=args.lr, 
         momentum=0.9, 
         weight_decay=5e-4
     )
+    '''
     
     # Resume from checkpoint if specified
     start_epoch = 0
