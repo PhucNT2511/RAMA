@@ -72,8 +72,10 @@ class GaussianRAMALayer(nn.Module):
             self.norm2 = nn.LayerNorm(output_dim)
         '''
 
-        projection = torch.randn(input_dim, output_dim)
+        projection = torch.randn(input_dim, output_dim*2)
         self.projection = nn.Parameter(projection, requires_grad=False)
+
+        self.lambda2 = nn.Parameter(torch.tensor(0.5), requires_grad=True)
 
         if use_normalization:
             self.norm = nn.LayerNorm(output_dim)
@@ -111,8 +113,14 @@ class GaussianRAMALayer(nn.Module):
             out = torch.nn.functional.silu(out)
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
-            
-        return out
+        
+        out1, out2 = torch.chunk(out, 2, dim=-1)
+        
+        if self.lambda2 < 0.1 or self.lambda2 > 1.0:
+            self.lambda2.data = torch.clamp(self.lambda2.data, 0.1, 1.0)
+
+        #return out
+        return out1 - self.lambda2 * out2
 
 class ResidualBlock(nn.Module):
     """
