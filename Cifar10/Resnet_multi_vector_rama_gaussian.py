@@ -778,6 +778,7 @@ class Trainer:
                 self.neptune_run["Train/Accuracy"].append(train_acc)
                 self.neptune_run["Test/Loss"].append(test_loss)
                 self.neptune_run["Test/Accuracy"].append(test_acc)
+                self.neptune_run["Lambda2"].append(self.model.rama_layer4.lambda2.item())
                 if self.use_rama and self.use_hyperparameter_optimization:
                     self.neptune_run["RAMA_LAMBDA"].append(self.best_lambda)
 
