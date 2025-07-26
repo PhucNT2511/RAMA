@@ -874,7 +874,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR-100 Training with Resnet and Gaussian RAMA Layers')
     
     # Training parameters
-    parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
+    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--epochs', default=20, type=int, help='number of epochs')
     parser.add_argument('--batch-size', default=128, type=int, help='batch size')
     parser.add_argument('--data-dir', default='./data', help='data directory')
