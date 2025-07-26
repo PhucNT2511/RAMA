@@ -116,8 +116,7 @@ class GaussianRAMALayer(nn.Module):
         
         out1, out2 = torch.chunk(out, 2, dim=-1)
         
-        if self.lambda2 < 0.1 or self.lambda2 > 1.0:
-            self.lambda2.data = torch.clamp(self.lambda2.data, 0.1, 1.0)
+        #self.lambda2.data = torch.clamp(self.lambda2.data, 0.1, 1.0)
 
         #return out
         return out1 - self.lambda2 * out2
