@@ -72,14 +72,15 @@ class GaussianRAMALayer(nn.Module):
             self.norm2 = nn.LayerNorm(output_dim)
         '''
 
-        projection = torch.randn(input_dim, output_dim*2)
+        self.linear = nn.Linear(input_dim, input_dim*2, bias=False)
+
+        projection = torch.randn(input_dim*2, output_dim*2)
         self.projection = nn.Parameter(projection, requires_grad=False)
 
         self.lambda2 = nn.Parameter(torch.tensor(0.5), requires_grad=True)
 
         if use_normalization:
-            self.norm = nn.LayerNorm(output_dim)
-
+            self.norm = nn.LayerNorm(output_dim*2)
 
     def forward(self, x, lambda_value):
         """
@@ -93,7 +94,9 @@ class GaussianRAMALayer(nn.Module):
         if lambda_value is not None:
             self.lambda_value = lambda_value
 
-        out = x @ self.projection
+        out = self.linear(x)
+
+        out = out @ self.projection
 
         out *= self.sqrt_d * self.lambda_value
 
@@ -116,7 +119,7 @@ class GaussianRAMALayer(nn.Module):
         
         out1, out2 = torch.chunk(out, 2, dim=-1)
         
-        #self.lambda2.data = torch.clamp(self.lambda2.data, 0.1, 1.0)
+        self.lambda2 = torch.clamp(self.lambda2, 0.3, 0.8)
 
         #return out
         return out1 - self.lambda2 * out2
