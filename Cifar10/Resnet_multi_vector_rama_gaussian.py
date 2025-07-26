@@ -119,10 +119,10 @@ class GaussianRAMALayer(nn.Module):
         
         out1, out2 = torch.chunk(out, 2, dim=-1)
         
-        lambda2 = torch.clamp(self.lambda2, 0.3, 0.8)
+        #lambda2 = torch.clamp(self.lambda2, 0.3, 0.8)
 
         #return out
-        return out1 - lambda2 * out2
+        return out1 - self.lambda2 * out2
 
 class ResidualBlock(nn.Module):
     """
