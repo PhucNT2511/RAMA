@@ -76,13 +76,13 @@ class GaussianRAMALayer(nn.Module):
         projection = Q[:, :output_dim].contiguous()  # Lấy  output_dim cột đầu của Q
         '''
 
-        projection = torch.randn(input_dim, output_dim)
+        projection = torch.randn(input_dim, output_dim*2)
         self.projection = nn.Parameter(projection, requires_grad=False)
 
         if use_normalization:
-            self.norm = nn.LayerNorm(output_dim)
+            self.norm = nn.LayerNorm(output_dim*2)
         
-        #self.lambda2 = nn.Parameter(torch.tensor(0.5), requires_grad=True)  # Learnable lambda for the second part of the projection
+        self.lambda2 = nn.Parameter(torch.tensor(0.5), requires_grad=True)  # Learnable lambda for the second part of the projection
 
 
     def forward(self, x, lambda_value):
@@ -115,12 +115,12 @@ class GaussianRAMALayer(nn.Module):
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
             
-        return out
-        '''
+        #return out
+        
         out1, out2 = torch.chunk(out, 2, dim=-1)
-
+        self.lambda2 = torch.clamp(self.lambda2, 0.2, 0.8)
         return out1 - self.lambda2 * out2
-        '''
+        
 
 class ResidualBlock(nn.Module):
     """
