@@ -54,6 +54,8 @@ class GaussianRAMALayer(nn.Module):
         self.sqrt_d = 1
         if sqrt_dim == True:
             self.sqrt_d = math.sqrt(input_dim)
+
+        self.linear = nn.Linear(input_dim, input_dim*2, bias=False)
         
         '''
         projection1 = torch.randn(input_dim, input_dim//2)
@@ -76,7 +78,7 @@ class GaussianRAMALayer(nn.Module):
         projection = Q[:, :output_dim].contiguous()  # Lấy  output_dim cột đầu của Q
         '''
 
-        projection = torch.randn(input_dim, output_dim*2)
+        projection = torch.randn(input_dim*2, output_dim*2)
         self.projection = nn.Parameter(projection, requires_grad=False)
 
         if use_normalization:
@@ -93,6 +95,8 @@ class GaussianRAMALayer(nn.Module):
             x: Input tensor
             lambda_value: lambda
         """
+
+        out = self.linear(x)
                
         out = x @ self.projection
 
