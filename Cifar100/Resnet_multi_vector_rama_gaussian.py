@@ -76,13 +76,13 @@ class GaussianRAMALayer(nn.Module):
         projection = Q[:, :output_dim].contiguous()  # Lấy  output_dim cột đầu của Q
         '''
 
-        projection = torch.randn(input_dim, 2 * output_dim)
+        projection = torch.randn(input_dim, output_dim)
         self.projection = nn.Parameter(projection, requires_grad=False)
 
         if use_normalization:
-            self.norm = nn.LayerNorm(2*output_dim)
+            self.norm = nn.LayerNorm(output_dim)
         
-        self.lambda2 = nn.Parameter(torch.tensor(0.5), requires_grad=True)  # Learnable lambda for the second part of the projection
+        #self.lambda2 = nn.Parameter(torch.tensor(0.5), requires_grad=True)  # Learnable lambda for the second part of the projection
 
 
     def forward(self, x, lambda_value):
@@ -115,10 +115,12 @@ class GaussianRAMALayer(nn.Module):
         elif self.activation == "gelu":
             out = torch.nn.functional.gelu(out)
             
-        #return out
+        return out
+        '''
         out1, out2 = torch.chunk(out, 2, dim=-1)
 
         return out1 - self.lambda2 * out2
+        '''
 
 class ResidualBlock(nn.Module):
     """
@@ -774,9 +776,10 @@ class Trainer:
                 self.neptune_run["Test/Accuracy"].append(test_acc)
                 if self.use_rama and self.use_hyperparameter_optimization:
                     self.neptune_run["RAMA_LAMBDA"].append(self.best_lambda)
+                '''
                 if self.use_rama:
                     self.neptune_run["Lambda2"].append(self.model.rama_layer4.lambda2.item())
-
+                '''
             # Log to TensorBoard if available.
             if self.writer:
                 self.writer.add_scalar("Train/Loss", train_loss, epoch)
