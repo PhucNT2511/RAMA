@@ -98,7 +98,7 @@ class GaussianRAMALayer(nn.Module):
 
         out = self.linear(x)
                
-        out = x @ self.projection
+        out = out @ self.projection
 
         out *= self.sqrt_d * self.lambda_value
 
