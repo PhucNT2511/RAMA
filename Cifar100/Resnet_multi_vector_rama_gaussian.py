@@ -84,7 +84,7 @@ class GaussianRAMALayer(nn.Module):
         if use_normalization:
             self.norm = nn.LayerNorm(output_dim*2)
         
-        self.lambda2 = nn.Parameter(torch.tensor(0.1), requires_grad=True)  # Learnable lambda for the second part of the projection
+        self.lambda2 = nn.Parameter(torch.tensor(0.5), requires_grad=True)  # Learnable lambda for the second part of the projection
 
 
     def forward(self, x, lambda_value):
@@ -122,8 +122,8 @@ class GaussianRAMALayer(nn.Module):
         #return out
         
         out1, out2 = torch.chunk(out, 2, dim=-1)
-        #lambda2 = torch.clamp(self.lambda2, 0.2, 0.8)
-        lambda2 = self.lambda2
+        lambda2 = torch.clamp(self.lambda2, 0.1, 0.9)
+        #lambda2 = self.lambda2
         return lambda2 * out1 - (1 - lambda2) * out2
         
 
