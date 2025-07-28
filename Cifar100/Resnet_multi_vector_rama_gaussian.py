@@ -123,7 +123,7 @@ class GaussianRAMALayer(nn.Module):
         
         out1, out2 = torch.chunk(out, 2, dim=-1)
         #lambda2 = torch.clamp(self.lambda2, 0.2, 0.8)
-        lambda2 = torch.clamp(self.lambda2, 0.01, 1.0)
+        lambda2 = self.lambda2
         return lambda2 * out1 - (1 - lambda2) * out2
         
 
