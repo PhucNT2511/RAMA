@@ -123,7 +123,7 @@ class GaussianRAMALayer(nn.Module):
         
         out1, out2 = torch.chunk(out, 2, dim=-1)
         lambda2 = torch.clamp(self.lambda2, 0.2, 0.8)
-        return out1 - lambda2 * out2
+        return lambda2 * out1 - (1 - lambda2) * out2
         
 
 class ResidualBlock(nn.Module):
@@ -780,10 +780,10 @@ class Trainer:
                 self.neptune_run["Test/Accuracy"].append(test_acc)
                 if self.use_rama and self.use_hyperparameter_optimization:
                     self.neptune_run["RAMA_LAMBDA"].append(self.best_lambda)
-                '''
+                
                 if self.use_rama:
                     self.neptune_run["Lambda2"].append(self.model.rama_layer4.lambda2.item())
-                '''
+                
             # Log to TensorBoard if available.
             if self.writer:
                 self.writer.add_scalar("Train/Loss", train_loss, epoch)
