@@ -124,7 +124,22 @@ class GaussianRAMALayer(nn.Module):
         out1, out2 = torch.chunk(out, 2, dim=-1)
         lambda2 = torch.clamp(self.lambda2, 0.1, 0.9)
         #lambda2 = self.lambda2
-        return lambda2 * out1 - (1 - lambda2) * out2
+        
+        out_ = out1 - lambda2 * out2
+        # Apply activation function
+        if self.activation == "relu":
+            out_ = F.relu(out_)
+        elif self.activation == "leaky_relu":
+            out_ = F.leaky_relu(out_, negative_slope=0.01)
+        elif self.activation == "tanh":
+            out_ = torch.tanh(out_)
+        elif self.activation == "sigmoid":
+            out_ = torch.sigmoid(out_)
+        elif self.activation == "silu":
+            out_ = torch.nn.functional.silu(out_)
+        elif self.activation == "gelu":
+            out_ = torch.nn.functional.gelu(out_)
+        return out_
         
 
 class ResidualBlock(nn.Module):
